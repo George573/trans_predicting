@@ -444,7 +444,12 @@ header(
 )
 frame(36, 280, 529, 361, "Figure 3. Hourly branch filters on a common scale")
 left, right = 83, 525
-mapping = lambda v: left + (v + 168) / 336 * (right - left)
+
+
+def mapping(v):
+    return left + (v + 168) / 336 * (right - left)
+
+
 for y, k, d, label in [
     (555, 3, 1, "Local: k=3, d=1"),
     (475, 5, 24, "Daily offsets: k=5, d=24"),
