@@ -30,25 +30,25 @@ Track execution of [implementation_steps.md](implementation_steps.md). Technical
 
 ## 1. Package skeleton and configuration
 
-**Status:** Not started
+**Status:** In progress
 **Completed:** —
 
-- **What changed:** —
-- **How implemented:** —
-- **Verification:** —
-- **Files/artifacts:** —
-- **Remaining work/blockers:** Not assessed.
+- **What changed:** Package skeleton, model configuration and explicit pending CLI commands.
+- **How implemented:** Frozen validated configuration with deterministic hash; src-layout packaging.
+- **Verification:** 8 tests pass in aggregate; configuration roundtrip and invalid path checks.
+- **Files/artifacts:** pyproject.toml, configs/default.json, src/tram_forecast/config.py, cli.py
+- **Remaining work/blockers:** Full preprocessing/training configuration and install integration remain.
 
 ## 2. Parsing, hourly labels, and calendar features
 
-**Status:** Not started
+**Status:** In progress
 **Completed:** —
 
-- **What changed:** —
-- **How implemented:** —
-- **Verification:** —
-- **Files/artifacts:** —
-- **Remaining work/blockers:** Not assessed.
+- **What changed:** Strict CSV parsing, hourly label grid, count scale and calendar vectors.
+- **How implemented:** Streaming readers, route parser, duplicate validation and NumPy calendar encoding.
+- **Verification:** Fixture parsing, held-out scale exclusion, duplicate rejection and calendar tests pass.
+- **Files/artifacts:** src/tram_forecast/schema.py, tests/test_contracts.py
+- **Remaining work/blockers:** Broader malformed-input fixtures and preparation integration remain.
 
 ## 3. Disk-backed preprocessing and vocabulary artifacts
 
@@ -63,14 +63,14 @@ Track execution of [implementation_steps.md](implementation_steps.md). Technical
 
 ## 4. Daily sample dataset and epoch sampler
 
-**Status:** Not started
+**Status:** In progress
 **Completed:** —
 
-- **What changed:** —
-- **How implemented:** —
-- **Verification:** —
-- **Files/artifacts:** —
-- **Remaining work/blockers:** Not assessed.
+- **What changed:** Compact daily sample identities and deterministic epoch permutation.
+- **How implemented:** Enumerate valid cutoff/lead pairs; seed epoch shuffles without replacement.
+- **Verification:** 105,408 unique identities; leads 1–61 and split boundaries verified.
+- **Files/artifacts:** src/tram_forecast/dataset.py, tests/test_contracts.py
+- **Remaining work/blockers:** Memory-mapped sample loading depends on step 3; full Gate A pending.
 
 ## 5. Universal multiscale block and event encoder
 
