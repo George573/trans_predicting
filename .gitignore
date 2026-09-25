@@ -1,0 +1,64 @@
+# Virtual Environment
+venv_*/
+venv/
+env/
+ENV/
+
+# Environment variables
+.env
+.env.local
+
+# macOS
+.DS_Store
+*.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+*.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# CatBoost
+catboost_info/
+*.tsv
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+dataset/test.csv
+dataset/train.csv
