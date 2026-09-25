@@ -1,0 +1,147 @@
+{
+  "model": "MLP with route and hour-of-week embeddings",
+  "spec": {
+    "d_route": 16,
+    "d_how": 16,
+    "d_daytype": 4,
+    "hidden": 256,
+    "dropout": 0.03731401177720717,
+    "lr": 0.007247964111811321,
+    "weight_decay": 0.0001436709513866422,
+    "epochs": 130,
+    "batch_size": 1024,
+    "n_seeds": 5,
+    "daylight": false,
+    "device": "auto"
+  },
+  "routes": [
+    1,
+    5,
+    7,
+    11,
+    12,
+    17,
+    25,
+    26,
+    28,
+    50
+  ],
+  "train_period": [
+    "2025-01-01",
+    "2025-10-31"
+  ],
+  "cv_wape": 0.17154907658544696,
+  "cv_per_fold": {
+    "fold0_wape": 0.13297907174940277,
+    "fold1_wape": 0.26478515808070857,
+    "fold2_wape": 0.11688299992622962
+  },
+  "use_calibration": false,
+  "route_calibration": {},
+  "dead_route_hour_pairs": [
+    {
+      "route": 5,
+      "hour": 6
+    },
+    {
+      "route": 5,
+      "hour": 15
+    },
+    {
+      "route": 5,
+      "hour": 1
+    },
+    {
+      "route": 5,
+      "hour": 11
+    },
+    {
+      "route": 5,
+      "hour": 5
+    },
+    {
+      "route": 25,
+      "hour": 2
+    },
+    {
+      "route": 5,
+      "hour": 13
+    },
+    {
+      "route": 5,
+      "hour": 16
+    },
+    {
+      "route": 5,
+      "hour": 9
+    },
+    {
+      "route": 5,
+      "hour": 17
+    },
+    {
+      "route": 5,
+      "hour": 12
+    },
+    {
+      "route": 5,
+      "hour": 7
+    },
+    {
+      "route": 5,
+      "hour": 2
+    },
+    {
+      "route": 5,
+      "hour": 0
+    },
+    {
+      "route": 5,
+      "hour": 4
+    },
+    {
+      "route": 5,
+      "hour": 14
+    },
+    {
+      "route": 5,
+      "hour": 8
+    },
+    {
+      "route": 5,
+      "hour": 3
+    },
+    {
+      "route": 25,
+      "hour": 3
+    },
+    {
+      "route": 5,
+      "hour": 10
+    },
+    {
+      "route": 5,
+      "hour": 20
+    },
+    {
+      "route": 5,
+      "hour": 21
+    },
+    {
+      "route": 5,
+      "hour": 18
+    },
+    {
+      "route": 5,
+      "hour": 19
+    },
+    {
+      "route": 5,
+      "hour": 22
+    },
+    {
+      "route": 5,
+      "hour": 23
+    }
+  ]
+}

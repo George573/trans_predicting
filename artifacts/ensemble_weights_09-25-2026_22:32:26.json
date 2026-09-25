@@ -1,0 +1,9 @@
+{
+  "weights": {
+    "catboost_cyclic": 0.7000000000000001,
+    "catboost_base": 0.0,
+    "harmonic": 0.0,
+    "mlp": 0.30000000000000004
+  },
+  "oof_wape": 0.11082435224486163
+}

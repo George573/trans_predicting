@@ -24,6 +24,12 @@ FOLD_BOUNDS: list[tuple[date, date, date]] = [
     (date(2025, 8, 31), date(2025, 9, 1), date(2025, 10, 31)),
 ]
 
+# Фолд с непрерывным режимом: осень по осени, без летнего разрыва. Ближе всего к реальной
+# задаче (ноя-дек по янв-окт), поэтому для моделей, чувствительных к смене режима, отбор
+# имеет смысл вести по нему и по третьему фолду, а не по среднему из четырёх.
+FOLD_CONTINUOUS: tuple[date, date, date] = (date(2025, 9, 30), date(2025, 10, 1), date(2025, 10, 31))
+FOLD_BOUNDS_EXT: list[tuple[date, date, date]] = FOLD_BOUNDS + [FOLD_CONTINUOUS]
+
 
 @dataclass(frozen=True)
 class Fold:
@@ -118,3 +124,49 @@ def cv_score(
         })
 
     return float(np.mean(scores)), scores, details
+
+
+def fit_group_calibration(
+    df: pl.DataFrame,
+    y_pred,
+    keys: tuple[str, ...] = ("route", "weekday"),
+    shrink: float = 5.0,
+    lo: float = CALIB_LO,
+    hi: float = CALIB_HI,
+) -> pl.DataFrame:
+    """Мультипликативная поправка по группам с усадкой к единице.
+
+    Коэффициентов много (route x weekday это 70 ячеек), наблюдений в каждой мало, поэтому
+    сырые отношения шумные: k = 1 + (k_raw - 1) * n / (n + shrink), где n - число дней в
+    ячейке. Замер на фолде 4: усадка 5 улучшает поправку монотонно.
+
+    ВАЖНО: окно оценки должно лежать в том же режиме, что и цель. Калибровка через границу
+    лето/учебный год измеримо вредит (фолд 3: 0.1096 -> 0.13-0.18), внутри режима помогает
+    (фолд 4: 0.1051 -> 0.0997).
+    """
+    return (
+        df.with_columns(pl.Series("__p", np.asarray(y_pred, dtype=float)))
+        .group_by(list(keys))
+        .agg(
+            pl.col("target").sum().alias("y"),
+            pl.col("__p").sum().alias("p"),
+            pl.col("date").n_unique().alias("n"),
+        )
+        .with_columns(
+            pl.when(pl.col("p") > 0).then(pl.col("y") / pl.col("p")).otherwise(1.0).alias("raw")
+        )
+        .with_columns(
+            (1.0 + (pl.col("raw") - 1.0) * pl.col("n") / (pl.col("n") + shrink)).clip(lo, hi).alias("k")
+        )
+        .select(list(keys) + ["k"])
+    )
+
+
+def apply_group_calibration(df: pl.DataFrame, y_pred, calib: pl.DataFrame, keys: tuple[str, ...]) -> np.ndarray:
+    joined = (
+        df.with_row_index("__i")
+        .with_columns(pl.Series("__p", np.asarray(y_pred, dtype=float)))
+        .join(calib, on=list(keys), how="left")
+        .sort("__i")
+    )
+    return (joined["__p"] * joined["k"].fill_null(1.0)).to_numpy()

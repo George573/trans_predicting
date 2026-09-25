@@ -1,3 +1,5 @@
+import math
+
 import polars as pl
 
 from datetime import date
@@ -163,11 +165,64 @@ def enrich_features(
         .with_columns(
             pl.col("date").dt.weekday().alias("weekday"),
             pl.col("date").dt.day().alias("day_of_month"),
-            pl.col("date").dt.ordinal_day().alias("day_of_year")
+            pl.col("date").dt.ordinal_day().alias("day_of_year"),
+            pl.col("date").dt.month().alias("month"),
         )
+        .with_columns(add_cyclic_features())
     )
     return enriched_df
 
+
+# внутринедельные циклы: их значения в ноябре-декабре ровно те же, что в истории
+CYCLIC_INTRAWEEK: list[str] = [
+    "hour_sin", "hour_cos",
+    "weekday_sin", "weekday_cos",
+    "day_of_month_sin", "day_of_month_cos",
+]
+
+# годовые циклы: ноября и декабря в обучении нет, поэтому эти значения модель видит впервые
+CYCLIC_YEAR: list[str] = [
+    "day_of_year_sin", "day_of_year_cos",
+    "month_sin", "month_cos",
+]
+
+CYCLIC_FEATURES: list[str] = CYCLIC_INTRAWEEK + CYCLIC_YEAR
+
+
+def add_cyclic_features() -> list[pl.Expr]:
+    """Синус-косинусное кодирование цикличных признаков.
+
+    Обычный номер часа разрывает сутки между 23 и 0, номер дня недели - неделю между
+    воскресеньем и понедельником. Пара sin/cos кладёт цикл на окружность, где эти точки
+    соседние, и расстояние между значениями становится осмысленным.
+
+    Для линейных моделей это даёт точную экстраполяцию: синус определён для любой даты,
+    поэтому форма декабря считается по формуле. Деревьям пара sin/cos сама по себе
+    экстраполировать не помогает - вне обученного диапазона они всё так же упираются в
+    последний лист, - но разбиения становятся осмысленнее на границах цикла.
+
+    Осторожно с day_of_year и month: ноябрь и декабрь в обучении не встречаются вообще,
+    поэтому их sin/cos лежат в невиданной области. Ровно поэтому наборы фич с ними и без
+    них перебираются подбором, а не берутся по умолчанию.
+    """
+    two_pi = 2 * math.pi
+    day_of_month_period = pl.col("date").dt.month_end().dt.day().cast(pl.Float64)
+    year_period = pl.when(pl.col("date").dt.is_leap_year()).then(366.0).otherwise(365.0)
+
+    specs = [
+        ("hour", pl.col("hour").cast(pl.Float64), pl.lit(24.0)),
+        ("weekday", pl.col("weekday").cast(pl.Float64) - 1.0, pl.lit(7.0)),
+        ("day_of_month", pl.col("day_of_month").cast(pl.Float64) - 1.0, day_of_month_period),
+        ("day_of_year", pl.col("day_of_year").cast(pl.Float64) - 1.0, year_period),
+        ("month", pl.col("month").cast(pl.Float64) - 1.0, pl.lit(12.0)),
+    ]
+
+    exprs: list[pl.Expr] = []
+    for name, value, period in specs:
+        angle = two_pi * value / period
+        exprs.append(angle.sin().alias(f"{name}_sin"))
+        exprs.append(angle.cos().alias(f"{name}_cos"))
+    return exprs
 
 def build_submit(
     start_date: date = date(2025, 11, 1),
