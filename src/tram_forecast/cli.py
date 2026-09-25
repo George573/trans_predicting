@@ -1,6 +1,7 @@
 import argparse
 
-from .config import Config
+from .io import digest
+from .settings import Settings
 
 
 def main():
@@ -35,8 +36,8 @@ def main():
             p.add_argument("--output", required=True)
     args = parser.parse_args()
     if args.command == "check-config":
-        print(Config.load(args.config).fingerprint)
+        print(digest(Settings.load(args.config).to_dict()))
     else:
         parser.error(
-            f"{args.command} is not implemented yet; consult implementation_progress.md"
+            f"{args.command} is not implemented yet; consult docs/development/implementation_progress.md"
         )

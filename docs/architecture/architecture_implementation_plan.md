@@ -263,7 +263,7 @@ Stop optional testing once these gates pass. If a gate fails, fix the specific c
 
 ## 12. Work order and CLI contract
 
-See [implementation_steps.md](implementation_steps.md) for the task-by-task checklist, deliverables, completion checks, and implementation-agent handoff. Steps 1–11 implement and verify the package; steps 12–13 are separately requested experiment and final-forecast execution phases.
+See [implementation_steps.md](../development/implementation_steps.md) for the task-by-task checklist, deliverables, completion checks, and implementation-agent handoff. Steps 1–11 implement and verify the package; steps 12–13 are separately requested experiment and final-forecast execution phases.
 
 Implement sequentially:
 

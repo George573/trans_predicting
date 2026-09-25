@@ -3,7 +3,7 @@ Mega ai transport planning solution 67
 
 ## Streaming boarding windows
 
-`hourly_windows.py` samples fixed length route-hour histories from the provided
+`experiments/legacy/hourly_windows.py` samples fixed length route-hour histories from the provided
 hourly labels without loading either CSV into memory. It reads rows in their
 existing route/date/hour order, merges train and test when both are supplied,
 and fills absent hours with zero. Each filled hour has `observed=False` so it
@@ -14,14 +14,14 @@ To inspect two random training windows with eight history hours and a target
 one hour ahead:
 
 ```bash
-python hourly_windows.py dataset/labels/labels_day_train.csv \
+python experiments/legacy/hourly_windows.py dataset/labels/labels_day_train.csv \
   --history-hours 8 --horizon-hours 1 --sample-size 2
 ```
 
 To inspect a September target whose history can extend into August:
 
 ```bash
-python hourly_windows.py \
+python experiments/legacy/hourly_windows.py \
   dataset/labels/labels_day_train.csv \
   dataset/labels/labels_day_test.csv \
   --series-end 2025-10-31 --target-start 2025-09-01 \
@@ -104,7 +104,7 @@ The `src/tram_forecast` package currently implements validated model settings,
 source parsing/calendar functions, daily sample indexing, the complete multiscale
 network, and exact chunked/checkpointed event encoding. Every convolutional stage
 has parallel kernels with different lengths and dilations. See
-`implementation_progress.md` for completed and pending work.
+`docs/development/implementation_progress.md` for completed and pending work.
 
 Create an environment and install the package:
 

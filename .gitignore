@@ -228,5 +228,4 @@ __marimo__/
 *.pth
 *.duckdb
 *.duckdb.wal
-/cnn_sc_detect.ipynb
-/tram_architecture_design*.pdf
+/experiments/references/

@@ -4,7 +4,7 @@ import unittest
 from datetime import date, datetime
 from pathlib import Path
 
-from hourly_windows import iter_boarding_windows, iter_hourly_counts, sample_boarding_windows
+from experiments.legacy.hourly_windows import iter_boarding_windows, iter_hourly_counts, sample_boarding_windows
 
 
 class HourlyWindowsTest(unittest.TestCase):

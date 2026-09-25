@@ -1,6 +1,6 @@
 # Implementation progress tracker
 
-Track execution of [implementation_steps.md](implementation_steps.md). Technical requirements remain in [architecture_implementation_plan.md](architecture_implementation_plan.md).
+Track execution of [implementation_steps.md](implementation_steps.md). Technical requirements remain in [architecture_implementation_plan.md](../architecture/architecture_implementation_plan.md).
 
 ## Update rules
 
@@ -10,14 +10,14 @@ Track execution of [implementation_steps.md](implementation_steps.md). Technical
 - If incomplete, use **Blocked** or **In progress**, leave its checkbox unchecked, and state the remaining work.
 - Distinguish fixture checks, real-data checks, and experiments. Never mark unrun checks as passed.
 - Update this tracker as part of finishing each step; do not wait until the whole project is complete.
-- Steps 5–7 are complete at component/fixture level; steps 1, 2 and 4 have partial foundations. Steps 3 and 8–13 remain pending. Steps 12–13 remain separately requested execution phases. A model-first increment was chosen to verify the difficult convolution/memory components before real-data integration; sequential data gates have not been claimed complete.
+- Status entries below distinguish implemented code and synthetic checks from real-data execution. The user requested code only: no actual model training, full-data preparation, or forecast generation during this pass.
 
 ## Checklist
 
 - [ ] 1. Package skeleton and configuration
-- [ ] 2. Parsing, hourly labels, and calendar features
-- [ ] 3. Disk-backed preprocessing and vocabulary artifacts
-- [ ] 4. Daily sample dataset and epoch sampler
+- [x] 2. Parsing, hourly labels, and calendar features
+- [x] 3. Disk-backed preprocessing and vocabulary artifacts
+- [x] 4. Daily sample dataset and epoch sampler
 - [x] 5. Universal multiscale block and event encoder
 - [x] 6. Complete forecasting network
 - [x] 7. Ragged collation, checkpointing, and exact tiling
@@ -41,36 +41,36 @@ Track execution of [implementation_steps.md](implementation_steps.md). Technical
 
 ## 2. Parsing, hourly labels, and calendar features
 
-**Status:** In progress
-**Completed:** —
+**Status:** Done
+**Completed:** 2026-09-25
 
-- **What changed:** Strict CSV parsing, hourly label grid, count scale and calendar vectors.
-- **How implemented:** Streaming readers, route parser, duplicate validation and NumPy calendar encoding.
-- **Verification:** Fixture parsing, held-out scale exclusion, duplicate rejection and calendar tests pass.
-- **Files/artifacts:** src/tram_forecast/schema.py, tests/test_contracts.py
-- **Remaining work/blockers:** Broader malformed-input fixtures and preparation integration remain.
+- **What changed:** Strict parsing, labels, calendars and fitting-only scale.
+- **How implemented:** Validated CSV readers and complete hourly grids; production raw staging validates schema and timestamps.
+- **Verification:** Synthetic parsing/calendar/label and pipeline integration tests passed.
+- **Files/artifacts:** src/tram_forecast/schema.py; preprocess.py; tests/test_contracts.py; test_pipeline_data.py
+- **Remaining work/blockers:** No real-data scan requested.
 
 ## 3. Disk-backed preprocessing and vocabulary artifacts
 
-**Status:** Not started
-**Completed:** —
+**Status:** Done
+**Completed:** 2026-09-25
 
-- **What changed:** —
-- **How implemented:** —
-- **Verification:** —
-- **Files/artifacts:** —
-- **Remaining work/blockers:** Not assessed.
+- **What changed:** Immutable disk-backed event/label artifacts and training-only vocabularies.
+- **How implemented:** DuckDB bounded staging, external ordering and category grouping; memory-mapped int32 event export, offsets, source identity checks, atomic publication.
+- **Verification:** Fixture preparation/reuse, held-out category exclusion, final refit vocabulary growth and corrupt-scaler rejection passed.
+- **Files/artifacts:** src/tram_forecast/preprocess.py; storage.py; io.py; settings.py
+- **Remaining work/blockers:** Large-data runtime/disk capacity remain unmeasured.
 
 ## 4. Daily sample dataset and epoch sampler
 
-**Status:** In progress
-**Completed:** —
+**Status:** Done
+**Completed:** 2026-09-25
 
-- **What changed:** Compact daily sample identities and deterministic epoch permutation.
-- **How implemented:** Enumerate valid cutoff/lead pairs; seed epoch shuffles without replacement.
-- **Verification:** 105,408 unique identities; leads 1–61 and split boundaries verified.
-- **Files/artifacts:** src/tram_forecast/dataset.py, tests/test_contracts.py
-- **Remaining work/blockers:** Memory-mapped sample loading depends on step 3; full Gate A pending.
+- **What changed:** Storage-backed daily dataset and batch collation.
+- **How implemented:** Compact integer identity array; route-hour slices; separate targets; boarding-only path avoids event storage.
+- **Verification:** 105,408 structural identities verified; fixture histories/targets and both data modes passed.
+- **Files/artifacts:** src/tram_forecast/dataset.py; tests/test_pipeline_data.py
+- **Remaining work/blockers:** Real-data feasibility belongs to step 11.
 
 ## 5. Universal multiscale block and event encoder
 
