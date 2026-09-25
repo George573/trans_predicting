@@ -18,8 +18,8 @@ Track execution of [implementation_steps.md](implementation_steps.md). Technical
 - [ ] 2. Parsing, hourly labels, and calendar features
 - [ ] 3. Disk-backed preprocessing and vocabulary artifacts
 - [ ] 4. Daily sample dataset and epoch sampler
-- [ ] 5. Universal multiscale block and event encoder
-- [ ] 6. Complete forecasting network
+- [x] 5. Universal multiscale block and event encoder
+- [x] 6. Complete forecasting network
 - [ ] 7. Ragged collation, checkpointing, and exact tiling
 - [ ] 8. Fixed-cutoff evaluation and baselines
 - [ ] 9. Training loop, checkpointing, and resume
@@ -74,25 +74,25 @@ Track execution of [implementation_steps.md](implementation_steps.md). Technical
 
 ## 5. Universal multiscale block and event encoder
 
-**Status:** Not started
-**Completed:** —
+**Status:** Done
+**Completed:** 2026-09-25
 
-- **What changed:** —
-- **How implemented:** —
-- **Verification:** —
-- **Files/artifacts:** —
-- **Remaining work/blockers:** Not assessed.
+- **What changed:** Independent multiscale event blocks, embeddings, masked pooling and empty-hour handling.
+- **How implemented:** Exact configured parallel Conv1d/GELU paths with aligned concatenation and masking.
+- **Verification:** 11 tests pass on CPU PyTorch 2.14.0; padding output/gradient equivalence, branch gradients, tiny-fixture learning, cache/reload equivalence and 199,268 maximum parameter count.
+- **Files/artifacts:** src/tram_forecast/model/blocks.py, events.py, tests/test_model.py
+- **Remaining work/blockers:** None for this component; real-data integration remains in later steps.
 
 ## 6. Complete forecasting network
 
-**Status:** Not started
-**Completed:** —
+**Status:** Done
+**Completed:** 2026-09-25
 
-- **What changed:** —
-- **How implemented:** —
-- **Verification:** —
-- **Files/artifacts:** —
-- **Remaining work/blockers:** Not assessed.
+- **What changed:** Full calendar-aware two-branch network, compressed head, cached-history API and parameter reporting.
+- **How implemented:** Exact configured parallel Conv1d/GELU paths with aligned concatenation and masking.
+- **Verification:** 11 tests pass on CPU PyTorch 2.14.0; padding output/gradient equivalence, branch gradients, tiny-fixture learning, cache/reload equivalence and 199,268 maximum parameter count.
+- **Files/artifacts:** src/tram_forecast/model/network.py, tests/test_model.py
+- **Remaining work/blockers:** None for this component; real-data integration remains in later steps.
 
 ## 7. Ragged collation, checkpointing, and exact tiling
 
