@@ -10,7 +10,7 @@ Track execution of [implementation_steps.md](implementation_steps.md). Technical
 - If incomplete, use **Blocked** or **In progress**, leave its checkbox unchecked, and state the remaining work.
 - Distinguish fixture checks, real-data checks, and experiments. Never mark unrun checks as passed.
 - Update this tracker as part of finishing each step; do not wait until the whole project is complete.
-- Planning documents already exist, but no implementation step has been completed. Steps 12–13 remain separately requested execution phases.
+- Steps 5–7 are complete at component/fixture level; steps 1, 2 and 4 have partial foundations. Steps 3 and 8–13 remain pending. Steps 12–13 remain separately requested execution phases. A model-first increment was chosen to verify the difficult convolution/memory components before real-data integration; sequential data gates have not been claimed complete.
 
 ## Checklist
 
@@ -20,7 +20,7 @@ Track execution of [implementation_steps.md](implementation_steps.md). Technical
 - [ ] 4. Daily sample dataset and epoch sampler
 - [x] 5. Universal multiscale block and event encoder
 - [x] 6. Complete forecasting network
-- [ ] 7. Ragged collation, checkpointing, and exact tiling
+- [x] 7. Ragged collation, checkpointing, and exact tiling
 - [ ] 8. Fixed-cutoff evaluation and baselines
 - [ ] 9. Training loop, checkpointing, and resume
 - [ ] 10. Final refit and submission pipeline
@@ -96,14 +96,14 @@ Track execution of [implementation_steps.md](implementation_steps.md). Technical
 
 ## 7. Ragged collation, checkpointing, and exact tiling
 
-**Status:** Not started
-**Completed:** —
+**Status:** Done
+**Completed:** 2026-09-25
 
-- **What changed:** —
-- **How implemented:** —
-- **Verification:** —
-- **Files/artifacts:** —
-- **Remaining work/blockers:** Not assessed.
+- **What changed:** Length-bucketed ragged execution, checkpointed event encoding, and exact core/halo tiling.
+- **How implemented:** Enforce padded-position/hour limits, derive halo from configured paths, restore chronological positions, preserve earliest maxima on ties.
+- **Verification:** 14 CPU tests pass, including padded/chunked/tiled value and parameter-gradient equivalence, boundary context, ties, empty hours and full-network integration. Ruff passes; editable installation and config CLI verified.
+- **Files/artifacts:** src/tram_forecast/collate.py, model/events.py, model/network.py, tests/test_event_chunks.py.
+- **Remaining work/blockers:** No component blocker. Peak memory and real busiest-history feasibility remain unmeasured until step 11; global Gate B data-leakage integration checks await storage/dataset implementation.
 
 ## 8. Fixed-cutoff evaluation and baselines
 

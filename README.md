@@ -97,3 +97,39 @@ Check a finished report and the headers of its detail tables with:
 ```bash
 python tools/check_profile.py outputs/data_profile/profile.json
 ```
+
+## Forecast package: implemented core
+
+The `src/tram_forecast` package currently implements validated model settings,
+source parsing/calendar functions, daily sample indexing, the complete multiscale
+network, and exact chunked/checkpointed event encoding. Every convolutional stage
+has parallel kernels with different lengths and dilations. See
+`implementation_progress.md` for completed and pending work.
+
+Create an environment and install the package:
+
+```bash
+python -m venv .venv
+.venv/bin/python -m pip install -e '.[test]'
+.venv/bin/python -m tram_forecast check-config --config configs/default.json
+.venv/bin/python -m pytest -q
+```
+
+For a CPU-only PyTorch installation, install `torch` from
+`https://download.pytorch.org/whl/cpu` before installing the package. The core was
+verified with Python 3.14 and PyTorch 2.14.0+cpu. GPU and real-data memory checks
+have not been run. Preprocessing/training/evaluation/submission CLI commands
+currently fail explicitly as pending integration; they do not run a pipeline.
+
+`ForecastNetwork` accepts a history dictionary with original-unit `counts`
+`[B,1,504]`, historical `calendar` `[B,6,504]`, and `hours`: a list of `B*504`
+chronologically aligned int64 tensors `[number_of_events,5]`. Empty hours use
+`[0,5]` tensors. Category IDs must come from training-only fitted vocabularies.
+Request dictionaries contain `route_indices` `[B]` (1–9 in configured route order),
+`calendar` `[B,4]`, and `lead` `[B]` (1–61). Floating inputs must share the model's
+device. Outputs are nonnegative original-unit counts `[B,24]`.
+
+Raw datasets/excerpts, generated outputs/checkpoints, the exploratory notebook,
+and superseded PDF designs remain local and are ignored by Git. Dataset rules
+are retained in `dataset/README.md`; the Markdown implementation plan is the
+source of truth for the model.
