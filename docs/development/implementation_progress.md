@@ -14,30 +14,30 @@ Track execution of [implementation_steps.md](implementation_steps.md). Technical
 
 ## Checklist
 
-- [ ] 1. Package skeleton and configuration
+- [x] 1. Package skeleton and configuration
 - [x] 2. Parsing, hourly labels, and calendar features
 - [x] 3. Disk-backed preprocessing and vocabulary artifacts
 - [x] 4. Daily sample dataset and epoch sampler
 - [x] 5. Universal multiscale block and event encoder
 - [x] 6. Complete forecasting network
 - [x] 7. Ragged collation, checkpointing, and exact tiling
-- [ ] 8. Fixed-cutoff evaluation and baselines
-- [ ] 9. Training loop, checkpointing, and resume
-- [ ] 10. Final refit and submission pipeline
+- [x] 8. Fixed-cutoff evaluation and baselines
+- [x] 9. Training loop, checkpointing, and resume
+- [x] 10. Final refit and submission pipeline
 - [ ] 11. Real-data preparation and resource smoke checks
 - [ ] 12. Validation experiments — explicit execution phase
 - [ ] 13. Final fit and forecast — explicit execution phase
 
 ## 1. Package skeleton and configuration
 
-**Status:** In progress
-**Completed:** —
+**Status:** Done
+**Completed:** 2026-09-25
 
-- **What changed:** Package skeleton, model configuration and explicit pending CLI commands.
-- **How implemented:** Frozen validated configuration with deterministic hash; src-layout packaging.
-- **Verification:** 8 tests pass in aggregate; configuration roundtrip and invalid path checks.
-- **Files/artifacts:** pyproject.toml, configs/default.json, src/tram_forecast/config.py, cli.py
-- **Remaining work/blockers:** Full preprocessing/training configuration and install integration remain.
+- **What changed:** Complete package layout, application/model configuration and functional CLI.
+- **How implemented:** Nested validated model/data/training settings; explicit subcommands and atomic outputs; organized architecture/development docs and legacy experiments.
+- **Verification:** Editable package install, configuration loading, CLI help/inspect and lint verified.
+- **Files/artifacts:** pyproject.toml; configs/default.json; src/tram_forecast/settings.py; cli.py; README.md
+- **Remaining work/blockers:** None for code delivery.
 
 ## 2. Parsing, hourly labels, and calendar features
 
@@ -79,7 +79,7 @@ Track execution of [implementation_steps.md](implementation_steps.md). Technical
 
 - **What changed:** Independent multiscale event blocks, embeddings, masked pooling and empty-hour handling.
 - **How implemented:** Exact configured parallel Conv1d/GELU paths with aligned concatenation and masking.
-- **Verification:** 11 tests pass on CPU PyTorch 2.14.0; padding output/gradient equivalence, branch gradients, tiny-fixture learning, cache/reload equivalence and 199,268 maximum parameter count.
+- **Verification:** 11 tests pass on CPU PyTorch 2.14.0; padding output/gradient equivalence, branch gradients, a prior tiny-fixture learning check (before the later no-training instruction), cache/reload equivalence and 199,268 maximum parameter count.
 - **Files/artifacts:** src/tram_forecast/model/blocks.py, events.py, tests/test_model.py
 - **Remaining work/blockers:** None for this component; real-data integration remains in later steps.
 
@@ -90,7 +90,7 @@ Track execution of [implementation_steps.md](implementation_steps.md). Technical
 
 - **What changed:** Full calendar-aware two-branch network, compressed head, cached-history API and parameter reporting.
 - **How implemented:** Exact configured parallel Conv1d/GELU paths with aligned concatenation and masking.
-- **Verification:** 11 tests pass on CPU PyTorch 2.14.0; padding output/gradient equivalence, branch gradients, tiny-fixture learning, cache/reload equivalence and 199,268 maximum parameter count.
+- **Verification:** 11 tests pass on CPU PyTorch 2.14.0; padding output/gradient equivalence, branch gradients, a prior tiny-fixture learning check (before the later no-training instruction), cache/reload equivalence and 199,268 maximum parameter count.
 - **Files/artifacts:** src/tram_forecast/model/network.py, tests/test_model.py
 - **Remaining work/blockers:** None for this component; real-data integration remains in later steps.
 
@@ -103,70 +103,70 @@ Track execution of [implementation_steps.md](implementation_steps.md). Technical
 - **How implemented:** Enforce padded-position/hour limits, derive halo from configured paths, restore chronological positions, preserve earliest maxima on ties.
 - **Verification:** 14 CPU tests pass, including padded/chunked/tiled value and parameter-gradient equivalence, boundary context, ties, empty hours and full-network integration. Ruff passes; editable installation and config CLI verified.
 - **Files/artifacts:** src/tram_forecast/collate.py, model/events.py, model/network.py, tests/test_event_chunks.py.
-- **Remaining work/blockers:** No component blocker. Peak memory and real busiest-history feasibility remain unmeasured until step 11; global Gate B data-leakage integration checks await storage/dataset implementation.
+- **Remaining work/blockers:** No component blocker. Fixed-history held-out-target independence now has integration coverage. Real peak-memory feasibility is deferred under step 11.
 
 ## 8. Fixed-cutoff evaluation and baselines
 
-**Status:** Not started
-**Completed:** —
+**Status:** Done
+**Completed:** 2026-09-25
 
-- **What changed:** —
-- **How implemented:** —
-- **Verification:** —
-- **Files/artifacts:** —
-- **Remaining work/blockers:** Not assessed.
+- **What changed:** Fixed-cutoff evaluation, weekly profile and boarding-only network.
+- **How implemented:** Encode each route once; sum absolute error and actual totals before WAPE; report route/lead groups and separate route-5 fallback.
+- **Verification:** Untrained fixture evaluation, hand-calculated metrics, zero denominator, held-out target independence and event-free baseline passed.
+- **Files/artifacts:** src/tram_forecast/evaluate.py; model/network.py; tests/test_execution.py
+- **Remaining work/blockers:** No empirical trained-model comparison run.
 
 ## 9. Training loop, checkpointing, and resume
 
-**Status:** Not started
-**Completed:** —
+**Status:** Done
+**Completed:** 2026-09-25
 
-- **What changed:** —
-- **How implemented:** —
-- **Verification:** —
-- **Files/artifacts:** —
-- **Remaining work/blockers:** Not assessed.
+- **What changed:** Training, accumulation, early stopping, checkpointing and epoch resume code.
+- **How implemented:** Original-unit MAE; AdamW; sample-weighted partial groups; RNG/optimizer/artifact persistence; strict resume compatibility.
+- **Verification:** Inert model/loss/optimizer doubles test epoch control and early stopping; analytical gradients test partial accumulation. Untrained checkpoints/RNG roundtrip correctly. No actual optimizer training run.
+- **Files/artifacts:** src/tram_forecast/train.py; losses.py; checkpoint.py; tests/test_execution.py
+- **Remaining work/blockers:** Convergence and actual epoch-boundary resumed learning remain unmeasured by user request.
 
 ## 10. Final refit and submission pipeline
 
-**Status:** Not started
-**Completed:** —
+**Status:** Done
+**Completed:** 2026-09-25
 
-- **What changed:** —
-- **How implemented:** —
-- **Verification:** —
-- **Files/artifacts:** —
-- **Remaining work/blockers:** Not assessed.
+- **What changed:** Final refit and submission code.
+- **How implemented:** Fresh final artifacts/model with selected epoch count; all-route inference and separate route-5 zeros; exact key validation, atomic CSV and checkpoint provenance.
+- **Verification:** Mocked refit handoff preserves epoch selection; synthetic 14,640-key submission preserves template order and rejects nonfinite values.
+- **Files/artifacts:** src/tram_forecast/predict.py; train.py; tests/test_execution.py
+- **Remaining work/blockers:** No final training or real submission generated.
 
 ## 11. Real-data preparation and resource smoke checks
 
-**Status:** Not started
+**Status:** Code complete; real-data execution deferred
 **Completed:** —
 
-- **What changed:** —
-- **How implemented:** —
-- **Verification:** —
-- **Files/artifacts:** —
-- **Remaining work/blockers:** Not assessed.
+- **What changed:** Resource-check and real-data command code complete.
+- **How implemented:** Typical/busiest indexed history forward/backward with no optimizer; CPU RSS/CUDA peak reporting.
+- **Verification:** Synthetic artifact smoke command verified with optimizer steps explicitly prohibited; package tests pass.
+- **Files/artifacts:** src/tram_forecast/smoke.py; cli.py; README.md
+- **Remaining work/blockers:** Real-data preparation, GPU tests and real peak-memory/runtime checks deliberately not run (code-only request).
 
 ## 12. Validation experiments — explicit execution phase
 
-**Status:** Not started
+**Status:** Code complete; execution deferred
 **Completed:** —
 
-- **What changed:** —
-- **How implemented:** —
-- **Verification:** —
-- **Files/artifacts:** —
-- **Remaining work/blockers:** Not assessed.
+- **What changed:** Experiment and comparison commands implemented.
+- **How implemented:** Train/evaluate both model kinds and compare identical artifact/cutoff reports with weekly baseline.
+- **Verification:** Evaluation paths and comparison compatibility checks covered by code review/fixtures; no trained results claimed.
+- **Files/artifacts:** src/tram_forecast/train.py; evaluate.py; cli.py
+- **Remaining work/blockers:** Actual experiments excluded by the user.
 
 ## 13. Final fit and forecast — explicit execution phase
 
-**Status:** Not started
+**Status:** Code complete; execution deferred
 **Completed:** —
 
-- **What changed:** —
-- **How implemented:** —
-- **Verification:** —
-- **Files/artifacts:** —
-- **Remaining work/blockers:** Not assessed.
+- **What changed:** Final fitting/forecast command path implemented.
+- **How implemented:** Final preparation, fresh refit or epoch resume, cached-history predictions and validated submission export.
+- **Verification:** Final vocabulary regeneration, mocked refit and full-key synthetic export tests.
+- **Files/artifacts:** src/tram_forecast/preprocess.py; train.py; predict.py
+- **Remaining work/blockers:** Actual final fitting and production forecast excluded by the user.

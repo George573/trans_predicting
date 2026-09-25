@@ -11,17 +11,21 @@ from .events import EventEncoder
 
 
 class ForecastNetwork(nn.Module):
-    def __init__(self, vocab_sizes, scale, config=None):
+    def __init__(self, vocab_sizes, scale, config=None, model_kind="full"):
         super().__init__()
         self.config = config or Config()
+        if model_kind not in ("full", "boarding_only"):
+            raise ValueError("unknown model kind")
+        self.model_kind = model_kind
         if not math.isfinite(scale) or scale < 1:
             raise ValueError("scale must be finite and >=1")
         self.register_buffer("scale", torch.tensor(float(scale)))
-        self.events = EventEncoder(vocab_sizes, self.config)
-        self.raw = MultiscaleConv1d(38, self.config.hourly)
+        if model_kind == "full":
+            self.events = EventEncoder(vocab_sizes, self.config)
+            self.raw = MultiscaleConv1d(38, self.config.hourly)
         self.boarding = MultiscaleConv1d(7, self.config.hourly)
         self.shared = nn.Sequential(
-            MultiscaleConv1d(64, self.config.shared1),
+            MultiscaleConv1d(64 if model_kind == "full" else 32, self.config.shared1),
             nn.MaxPool1d(2, 2),
             MultiscaleConv1d(64, self.config.shared2),
             nn.MaxPool1d(2, 2),
@@ -49,14 +53,22 @@ class ForecastNetwork(nn.Module):
             or pooled.shape != (b, 32, 504)
         ):
             raise ValueError("history must cover exactly 504 aligned hours")
-        a = self.raw(torch.cat((pooled, calendar), dim=1))
+        a = (
+            self.raw(torch.cat((pooled, calendar), dim=1))
+            if self.model_kind == "full"
+            else None
+        )
         y = self.boarding(torch.cat((counts / self.scale, calendar), dim=1))
-        return self.shared(torch.cat((a, y), dim=1)).flatten(1)
+        return self.shared(torch.cat((a, y), dim=1) if a is not None else y).flatten(1)
 
     def encode_history(self, history):
         """Use ragged `hours` in flattened batch/hour order, or padded reference inputs."""
         counts = history["counts"]
         b = counts.shape[0]
+        if self.model_kind == "boarding_only":
+            return self.encode_pooled_history(
+                counts.new_zeros((b, 32, 504)), counts, history["calendar"]
+            )
         if "hours" in history:
             if len(history["hours"]) != b * 504:
                 raise ValueError("ragged history must contain exactly B*504 hours")

@@ -1,5 +1,6 @@
 """Bounded disk preparation. No exploratory full-data profiling or training."""
 
+import csv
 import shutil
 import tempfile
 import time
@@ -118,8 +119,17 @@ def _build(settings, identity, fingerprint, stage, temp_root):
                     flush=True,
                 )
                 # parallel=false and insertion order preserve a deterministic source-row tie key.
+                with open(path, encoding="utf-8-sig", newline="") as handle:
+                    header = next(csv.reader(handle, delimiter=";"), [])
+                selected_columns = FIELDS + ("ngpt_route", "tran_date_time")
+                if len(header) != len(set(header)) or not set(
+                    selected_columns
+                ).issubset(header):
+                    raise ValueError(f"{path}: missing or duplicate event columns")
                 connection.execute(
-                    "CREATE OR REPLACE TEMP TABLE input AS SELECT row_number() OVER () AS source_row, * FROM read_csv(?, delim=';', header=true, all_varchar=true, parallel=false, nullstr='', strict_mode=true)",
+                    "CREATE OR REPLACE TEMP TABLE input AS SELECT row_number() OVER () AS source_row, "
+                    + ",".join(selected_columns)
+                    + " FROM read_csv(?, delim=';', header=true, all_varchar=true, parallel=false, nullstr='', strict_mode=true)",
                     [str(path)],
                 )
                 names = {

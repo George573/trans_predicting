@@ -4,7 +4,11 @@ import unittest
 from datetime import date, datetime
 from pathlib import Path
 
-from experiments.legacy.hourly_windows import iter_boarding_windows, iter_hourly_counts, sample_boarding_windows
+from experiments.legacy.hourly_windows import (
+    iter_boarding_windows,
+    iter_hourly_counts,
+    sample_boarding_windows,
+)
 
 
 class HourlyWindowsTest(unittest.TestCase):
@@ -65,11 +69,13 @@ class HourlyWindowsTest(unittest.TestCase):
         options.update(horizon_hours=2, routes=None)
         windows = list(iter_boarding_windows([self.train, self.test], **options))
         route_one = next(
-            window for window in windows
+            window
+            for window in windows
             if window.route == 1 and window.target_time == datetime(2025, 9, 1, 1)
         )
         route_seven = next(
-            window for window in windows
+            window
+            for window in windows
             if window.route == 7 and window.target_time == datetime(2025, 9, 1, 1)
         )
         self.assertEqual(route_one.history_boardings, (4, 6))

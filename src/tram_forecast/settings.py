@@ -48,6 +48,8 @@ class DataSettings:
         if (
             not all(a < b for a, b in zip(dates, dates[1:]))
             or (dates[1] - dates[0]).days < 22
+            or (dates[2] - dates[1]).days > 61
+            or (dates[3] - dates[2]).days > 61
         ):
             raise ValueError(
                 "ordered fitting/evaluation dates with at least 22 training days required"

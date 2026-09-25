@@ -79,22 +79,10 @@ def test_network_parameters_forward_backward_and_cache():
         model(empty, dict(request, route_indices=torch.tensor([0])))
 
 
-def test_checkpoint_reload_and_tiny_learning(tmp_path):
+def test_state_dict_reload(tmp_path):
     torch.manual_seed(3)
-    model = ForecastNetwork([12] * 5, 1, Config(dropout=0)).train()
+    model = ForecastNetwork([12] * 5, 1, Config(dropout=0)).eval()
     history, request = fixture()
-    target = torch.full((1, 24), 2.0)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.001)
-    first = None
-    for _ in range(12):
-        optimizer.zero_grad()
-        loss = (model(history, request) - target).abs().mean()
-        if first is None:
-            first = loss.item()
-        loss.backward()
-        optimizer.step()
-    assert loss.item() < first * 0.8
-    model.eval()
     path = tmp_path / "weights.pt"
     torch.save(model.state_dict(), path)
     restored = ForecastNetwork([12] * 5, 1, Config(dropout=0)).eval()

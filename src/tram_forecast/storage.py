@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .config import FIELDS
 from .io import digest
 
 
@@ -21,6 +22,14 @@ class Store:
         self.routes = tuple(m["routes"])
         self.route_index = {r: i for i, r in enumerate(self.routes)}
         self.vocab = json.loads((self.path / "vocab.json").read_text())
+        if (
+            set(self.vocab) != set(FIELDS)
+            or [len(self.vocab[f]) + 3 for f in FIELDS] != m["vocab_sizes"]
+        ):
+            raise ValueError("artifact vocabulary sizes mismatch")
+        for mapping in self.vocab.values():
+            if sorted(mapping.values()) != list(range(3, len(mapping) + 3)):
+                raise ValueError("artifact vocabulary IDs are not contiguous")
         scaling = json.loads((self.path / "scaling.json").read_text())
         if (
             scaling["scale"] != m["scale"]
@@ -46,8 +55,21 @@ class Store:
             self.events.shape != (m["events"], 5) or self.events.dtype != np.int32
         ):
             raise ValueError("artifact event shape/dtype mismatch")
-        if m["events"] and int(self.offsets[-1, -1, 1]) != m["events"]:
+        if int(self.offsets[-1, -1, 1]) != m["events"]:
             raise ValueError("artifact terminal offset mismatch")
+        flat = self.offsets.reshape(-1, 2)
+        if (
+            self.offsets.dtype != np.int64
+            or self.counts.dtype != np.float32
+            or flat[0, 0] != 0
+            or (flat[:, 1] < flat[:, 0]).any()
+            or not np.array_equal(flat[1:, 0], flat[:-1, 1])
+        ):
+            raise ValueError(
+                "artifact offsets are not contiguous or dtypes are invalid"
+            )
+        if not np.isfinite(self.counts).all() or (self.counts < 0).any():
+            raise ValueError("invalid artifact boarding values")
         self.contract = {
             "fingerprint": m["fingerprint"],
             "vocab": self.vocab,

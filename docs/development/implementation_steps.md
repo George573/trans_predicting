@@ -1,6 +1,6 @@
 # Implementation steps
 
-Follow `architecture_implementation_plan.md` v1.1 for all architecture, data, training, and CLI details. This checklist divides that specification into bounded tasks; it does not change its defaults. Execute steps in order. All steps are initially pending.
+Follow `docs/architecture/architecture_implementation_plan.md` v1.1 for all architecture, data, training, and CLI details. This checklist divides that specification into bounded tasks; it does not change its defaults. Execute steps in order. Consult the progress tracker for current status.
 
 Record live status and completion summaries in [implementation_progress.md](implementation_progress.md). Update that tracker when starting or finishing each step.
 
@@ -122,6 +122,8 @@ For each step: read its referenced specification sections, implement the listed 
 
 ## 11. Real-data preparation and resource smoke checks
 
+Current user constraint: deliver code only. Implement the commands and verify synthetic fixtures, but defer real-data execution and mark it separately in the tracker.
+
 **Specification:** sections 4, 8, 11 Gate C, 12.
 
 - Check real paths, available RAM/disk and configured staging limits.
@@ -133,6 +135,8 @@ For each step: read its referenced specification sections, implement the listed 
 **Done when:** all applicable Gate C checks pass, real memory/timing measurements are recorded, and the package can run the documented experiment commands. If resource feasibility fails, record the concrete bottleneck and fix it before full training.
 
 ## 12. Validation experiments — explicit execution phase
+
+Current user constraint: implementation only; do not run actual training.
 
 This is a potentially lengthy experiment phase, separate from implementing the package. Run it when the user requests training/experiments; completing steps 1–11 does not automatically launch it.
 
@@ -156,4 +160,4 @@ Run after model selection and the user's request to produce the final forecast.
 
 ## Handoff instruction for an implementation agent
 
-> Read `architecture_implementation_plan.md` and `implementation_steps.md`. Implement step N only, using the exact defaults and interfaces in the plan. Inspect existing work and preserve it. Complete the step's focused checks, update its status with evidence, and report changed files, results and blockers. Do not substitute single convolutions for multiscale blocks, add model features, silently drop events, or start later experiment phases. If earlier steps are incomplete, report the precise missing prerequisite before implementing dependent behavior.
+> Read `docs/architecture/architecture_implementation_plan.md` and `docs/development/implementation_steps.md`. Implement step N only, using the exact defaults and interfaces in the plan. Inspect existing work and preserve it. Complete the step's focused checks, update its status with evidence, and report changed files, results and blockers. Do not substitute single convolutions for multiscale blocks, add model features, silently drop events, or start later experiment phases. If earlier steps are incomplete, report the precise missing prerequisite before implementing dependent behavior.
