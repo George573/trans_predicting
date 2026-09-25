@@ -141,3 +141,19 @@ including capped embeddings.
 
 Raw excerpts, the exploratory notebook and old PDFs remain local under ignored
 paths (`samples/`, `experiments/references/`). Source datasets were not deleted.
+
+## Scientific architecture PDF
+
+The five-page vector architecture note can be regenerated from the default model:
+
+```bash
+.venv/bin/python -m pip install -e '.[docs]'
+.venv/bin/python tools/docs/build_architecture_pdf.py
+```
+
+Output: `output/pdf/tram_cnn_scientific_architecture.pdf` (ignored generated artifact).
+The builder checks the full-model parameter ceiling and includes the source Git
+revision. It documents the full computation graph, every multiscale path, temporal
+support, exact event tiling, embeddings and the fixed-cutoff evaluation protocol.
+The user-supplied TFT visual reference is kept locally in
+`experiments/references/tft_diagram_reference.png`.
