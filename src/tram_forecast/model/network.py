@@ -123,8 +123,19 @@ class ForecastNetwork(nn.Module):
         )
 
     def forward(self, history, request):
+        encoded = self.encode_history(history)
+        if "context_indices" in request:
+            indices = request["context_indices"]
+            if (
+                indices.ndim != 1
+                or indices.dtype != torch.long
+                or (indices < 0).any()
+                or (indices >= encoded.shape[0]).any()
+            ):
+                raise ValueError("invalid request context indices")
+            encoded = encoded.index_select(0, indices)
         return self.predict_day(
-            self.encode_history(history),
+            encoded,
             request["route_indices"],
             request["calendar"],
             request["lead"],

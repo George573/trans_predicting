@@ -1,10 +1,20 @@
 # Implementation steps
 
-Follow `docs/architecture/architecture_implementation_plan.md` v1.1 for all architecture, data, training, and CLI details. This checklist divides that specification into bounded tasks; it does not change its defaults. Execute steps in order. Consult the progress tracker for current status.
+Follow `docs/architecture/architecture_implementation_plan.md` v1.2 for all architecture, data, training, and CLI details. This checklist divides that specification into bounded tasks; it does not change its defaults. Execute steps in order. Consult the progress tracker for current status.
 
 Record live status and completion summaries in [implementation_progress.md](implementation_progress.md). Update that tracker when starting or finishing each step.
 
 For each step: read its referenced specification sections, implement the listed deliverables, run its completion checks, and record changed files, checks run, results, and remaining blockers in the progress tracker. Preserve existing user work. Do not mark fixture tests as real-data verification. Do not start full training during implementation steps 1–11.
+
+## Current shared-context protocol (2026-09-26)
+
+The initial experiment horizon is `training.forecast_days=7` for all models.
+Dataset batches count route/cutoff contexts; each context has all eligible daily
+targets up to that horizon, with partial groups at the fitting boundary. Encode
+once per context and weight MAE/accumulation by requested-day count. Evaluation,
+refit and export use the checkpoint horizon. The 61-day and 14,640-row checks below
+remain extended-horizon acceptance checks; default exports contain 1,680 rows.
+See the progress tracker's refactor entry for current verification evidence.
 
 ## 1. Package skeleton and configuration
 

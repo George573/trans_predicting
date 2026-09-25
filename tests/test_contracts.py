@@ -29,12 +29,14 @@ def test_config_roundtrip_and_rejects_single_path(tmp_path):
 
 def test_sample_boundaries_and_shuffle():
     rows = sample_index(ROUTES, date(2025, 1, 1), date(2025, 9, 1))
-    assert len(rows) == 105408
+    assert len(rows) == 13797
     assert len(set(rows)) == len(rows)
     assert min(x.cutoff for x in rows) == date(2025, 1, 22)
     assert max(x.requested for x in rows) == date(2025, 8, 31)
-    assert {x.lead for x in rows} == set(range(1, 62))
-    assert sum(x.lead == 61 for x in rows) == 162 * 9
+    assert {x.lead for x in rows} == set(range(1, 8))
+    assert sum(x.lead == 7 for x in rows) == 216 * 9
+    extended = sample_index(ROUTES, date(2025, 1, 1), date(2025, 9, 1), 61)
+    assert len(extended) == 105408
     order = epoch_order(len(rows), 0)
     assert len(set(order)) == len(rows)
     assert np.array_equal(order, epoch_order(len(rows), 0))

@@ -1,7 +1,8 @@
 # Tram ridership forecasting
 
-A PyTorch package that predicts one requested day's 24 hourly boarding counts
-from 21 days of observed route history. Every convolutional stage uses parallel
+A PyTorch package that encodes 21 days of observed route history once and predicts
+24 hourly boarding counts for each requested future day. The initial horizon is
+seven days for both neural models and the weekly-profile baseline. Every convolutional stage uses parallel
 kernel lengths and dilations. The full model combines raw events and boarding
 history; a boarding-only model and weekly-profile baseline are also provided.
 
@@ -12,6 +13,7 @@ history; a boarding-only model and weekly-profile baseline are also provided.
 | `src/tram_forecast/` | Preprocessing, storage, dataset, model, training, evaluation, inference and CLI |
 | `configs/default.json` | Model, data and training settings |
 | `tests/` | Synthetic fixtures and correctness tests; no optimization runs |
+| `notebooks/train.ipynb` | Interactive training, resume, baseline comparison and forecast plots |
 | `docs/architecture/` | Architecture manifest and detailed implementation specification |
 | `docs/development/` | Implementation checklist and progress/evidence tracker |
 | `experiments/legacy/` | Earlier one-hour window utilities, retained outside the production package |
@@ -43,6 +45,25 @@ All commands below assume the environment is activated. Commands that perform
 training are implemented but were **not run** during this code-only delivery.
 Tests use temporary synthetic CSVs and untrained weights; backward checks do not
 perform optimizer steps. No full-data preparation or real forecast was run.
+
+## Training notebook
+
+Open [notebooks/train.ipynb](notebooks/train.ipynb) for the interactive workflow.
+Install notebook dependencies into the same environment as the training package:
+
+```bash
+.venv/bin/python -m pip install -e '.[notebook]'
+.venv/bin/python -m jupyterlab notebooks/train.ipynb
+```
+
+In VS Code, select `.venv/bin/python` as the notebook kernel. The configuration
+cell controls model kind, forecast horizon, device, batch size, accumulation,
+epochs, output directory and resume checkpoint. The default is boarding-only
+with a seven-day horizon; CUDA is selected when available. Run cells in order
+to prepare data, inspect the weekly baseline, check memory, train, and plot
+learning curves and forecasts. The Train cell performs actual optimization.
+Change the run name for a fresh experiment, or set `RESUME` to `latest.pt` to
+continue the same run. The notebook is saved without outputs or trained weights.
 
 ## Prepare data
 
@@ -90,15 +111,29 @@ python -m tram_forecast evaluate --checkpoint outputs/runs/validation/full/best.
 python -m tram_forecast compare --reports outputs/boarding_metrics.json outputs/full_metrics.json --output outputs/comparison.json
 ```
 
-Training defaults to original-unit MAE, AdamW, batch size 1 with accumulation 8,
-30 maximum epochs and patience 5. Validation freezes history at September 1 and
-predicts all September–October days directly. Reports include WAPE/MAE by route,
+Training defaults to original-unit MAE, AdamW, one context per batch with
+accumulation 8, 30 maximum epochs and patience 5. Each context is a route/cutoff
+pair with a 21-day history and all eligible targets at leads 1–7. It is encoded
+once per forward pass; the head predicts each requested day using that shared
+representation. Contexts are shuffled without replacement. Near the fitting
+boundary, shorter target groups are retained; loss and gradient accumulation
+weight every requested day equally.
+
+Validation freezes history at September 1 and predicts September 1–7 directly.
+Reports include WAPE/MAE by route,
 lead and lead group, and the weekly-profile baseline. No validation observation
 updates the history. Route 5 uses a separate zero fallback.
 
+Set `training.forecast_days` in `configs/default.json` to expand the horizon
+(integer 1–61). Start a fresh run for each horizon; prepared artifacts can be
+reused. Evaluation reads the horizon from the checkpoint, and comparison rejects
+reports with different horizons. The evaluation period must cover the requested
+horizon. Lead conditioning retains `(lead-1)/60`, so expansion does not change
+network geometry or parameter count.
+
 Checkpoints include model, optimizer, settings, fitted vocabulary/scaling contract,
 RNG state and epoch progress. Resume from the latest checkpoint in the same run
-directory; only increasing the epoch limit or changing the configured output root
+directory; only changing the epoch limit or the configured output root
 is accepted without a fresh run:
 
 ```bash
@@ -108,31 +143,46 @@ python -m tram_forecast train --artifact outputs/prepared/validation --model ful
 Epoch-boundary resume is supported. An interrupted partial epoch is rerun. Keep
 `best.pt`, `latest.pt` and `history.json` together. A fresh run refuses to overwrite
 an existing checkpoint directory; use `--output NEW_DIRECTORY`.
+Checkpoints from the earlier individual-request training layout remain loadable
+for inference with their original 61-day horizon, but cannot resume grouped-context
+training.
 
-## Final refit and submission
+## Final refit and forecast
 
 After choosing a validation model, execute these commands explicitly:
 
 ```bash
 python -m tram_forecast prepare --regime final
 python -m tram_forecast refit --selected-checkpoint outputs/runs/validation/full/best.pt --artifact outputs/prepared/final
-python -m tram_forecast predict --checkpoint outputs/runs/final/full/final.pt --artifact outputs/prepared/final --template dataset/test_submission.csv --output outputs/submission.csv
+python -m tram_forecast predict --checkpoint outputs/runs/final/full/final.pt --artifact outputs/prepared/final --template outputs/template_7days.csv --output outputs/forecast_7days.csv
 ```
 
 Refit rebuilds mappings/scaling for January–October and starts fresh weights for
-the selected epoch count. Submission reuses each route's October 11–31 encoding
-for all 61 requested days. It preserves template order, validates all 14,640
-unique keys, writes floating-point nonnegative predictions and records provenance.
+the selected epoch count and forecast horizon. Forecasting reuses each route's
+October 11–31 encoding for all requested days. For the default seven-day run,
+create `outputs/template_7days.csv` by filtering the supplied template to
+November 1–7. It must contain all ten routes and 24 hours (1,680 unique keys),
+with the original `route;date;hour;prediction` header. Template order is preserved;
+predictions are nonnegative floating-point values with recorded provenance.
+
+The competition requires all 61 days (14,640 keys). To produce that submission,
+first train/select with `training.forecast_days=61`, refit that checkpoint, then
+use the full `dataset/test_submission.csv` template. A seven-day output is an
+initial experiment, not a complete competition submission.
 November–December hidden labels are never used.
 
 ## Model API
 
 `ForecastNetwork` receives original-unit `counts [B,1,504]`, historical
 `calendar [B,6,504]`, and (full model only) `hours`: `B*504` chronological int64
-`[events,5]` tensors. Empty hours use `[0,5]`. Ragged IDs may remain on CPU;
-floating inputs/request tensors must share the model device. Request fields are
-`route_indices [B]`, `calendar [B,4]`, `lead [B]`. Outputs are `[B,24]` in original
-boarding units. Use `ForecastDataset` and `collate_samples` to build these inputs.
+`[events,5]` tensors. Here B counts contexts, not requested days. Empty hours use
+`[0,5]`. Ragged IDs may remain on CPU; floating inputs/request tensors must share
+the model device. For R total requested days, request fields are
+`context_indices [R]`, `route_indices [R]`, `calendar [R,4]`, `lead [R]`.
+Context indices select from the B encoded histories. Outputs and flattened targets
+are `[R,24]` in original boarding units. `ForecastDataset(..., forecast_days=7)`
+and `collate_samples` build these grouped inputs. Omitting `context_indices`
+preserves the one-request-per-context API.
 
 Learned event vectors are not cached during training. Inference uses
 `encode_history` once per route/cutoff and `predict_day` for each requested day.

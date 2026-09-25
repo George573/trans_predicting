@@ -11,7 +11,7 @@ import torch
 from .checkpoint import seed_all
 from .dataset import collate_samples, history_sample
 from .model import ForecastNetwork
-from .schema import SampleIdentity
+from .schema import SampleIdentity, request_calendar
 from .storage import Store
 
 
@@ -41,6 +41,11 @@ def smoke(settings, artifact, model_kind="full"):
         cutoff = store.start + timedelta(days=day)
         sample = history_sample(
             store, SampleIdentity(route, cutoff, cutoff), model_kind == "full"
+        )
+        days = settings.training.forecast_days
+        sample["lead"] = np.arange(1, days + 1, dtype=np.float32)
+        sample["request_calendar"] = request_calendar(
+            [cutoff + timedelta(days=i) for i in range(days)]
         )
         inputs, request, _ = collate_samples([sample], settings.training.device)
         if settings.training.device.startswith("cuda"):
@@ -81,4 +86,5 @@ def smoke(settings, artifact, model_kind="full"):
         "artifact": store.contract_hash,
         "optimizer_steps": 0,
         "batch_size_tested": 1,
+        "forecast_days": settings.training.forecast_days,
     }

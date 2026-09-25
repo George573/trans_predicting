@@ -60,6 +60,7 @@ class DataSettings:
 
 @dataclass(frozen=True)
 class TrainSettings:
+    forecast_days: int = 7
     batch_size: int = 1
     accumulation: int = 8
     epochs: int = 30
@@ -72,6 +73,8 @@ class TrainSettings:
     num_workers: int = 0
 
     def __post_init__(self):
+        if type(self.forecast_days) is not int or not 1 <= self.forecast_days <= 61:
+            raise ValueError("forecast_days must be an integer in 1..61")
         if any(
             type(v) is not int or v < 1
             for v in (self.batch_size, self.accumulation, self.epochs, self.patience)

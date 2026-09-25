@@ -48,6 +48,7 @@ def save_checkpoint(path, model, store, settings, optimizer=None, **progress):
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "version": 1,
+        "training_layout": "grouped_contexts_v1",
         "model": model.state_dict(),
         "model_kind": model.model_kind,
         "settings": settings.to_dict(),
@@ -79,6 +80,8 @@ def read_checkpoint(path):
         raise ValueError("unsupported checkpoint version")
     if digest(payload["artifact_contract"]) != payload["artifact_hash"]:
         raise ValueError("checkpoint artifact contract is corrupt")
+    # Old checkpoints were trained on leads 1..61, never reinterpret them as seven-day runs.
+    payload["settings"]["training"].setdefault("forecast_days", 61)
     return payload
 
 

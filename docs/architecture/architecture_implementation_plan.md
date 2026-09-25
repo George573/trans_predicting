@@ -1,6 +1,6 @@
 # Tram forecasting: executable architecture and implementation plan
 
-Version 1.1 — 2026-09-25. Status: implementation specification; no model accuracy or resource measurements claimed.
+Version 1.2 — 2026-09-26. Status: implementation specification; no model accuracy or resource measurements claimed.
 
 ## 1. Authority, scope, and deliverables
 
@@ -14,24 +14,34 @@ Defaults below are concrete implementation decisions within the agreed architect
 
 ## 2. Forecast contract and time boundaries
 
-One identity is `(route_id, cutoff_date, requested_date)`. All dates use the dataset's existing local calendar convention; do not silently timezone-convert naive timestamps. Retain full timestamps for sorting and boundaries.
+One training context is `(route_id, cutoff_date)` with all eligible requested days
+at leads 1 through `training.forecast_days` (default 7, supported range 1–61).
+An individual request has identity `(route_id, cutoff_date, requested_date)`. All dates use the dataset's existing local calendar convention; do not silently timezone-convert naive timestamps. Retain full timestamps for sorting and boundaries.
 
 - Cutoff `c` is midnight immediately after the last observed day.
 - History is exactly `[c - 504 hours, c)` for one route, including zero-filled label hours.
 - `lead = (requested_date - cutoff_date).days + 1`, restricted to 1..61.
 - Requested target is that date's hours 0..23, ordered chronologically, shape `[24]`.
 - All requested days are predicted directly from observed history. A forecast never enters another sample's history.
-- Validation: cutoff 2025-09-01; history August 11–31; targets September 1–October 31.
-- Submission: cutoff 2025-11-01; history October 11–31; targets November 1–December 31.
+- Validation: cutoff 2025-09-01; history August 11–31; default targets September 1–7; horizon 61 extends through October 31.
+- Submission: cutoff 2025-11-01; history October 11–31; default targets November 1–7; the competition requires horizon 61 through December 31.
 - Initial fitting interval: `[2025-01-01, 2025-09-01)`. Final refitting interval: `[2025-01-01, 2025-11-01)`.
 - Every training history hour and full target day must lie inside the fitting interval. Do not demand a label row for every hour: absent rows follow the zero-fill convention.
 - Fit vocabularies and count scaling using only the relevant fitting interval. Final refit rebuilds them using January–October and starts a fresh model.
 
 Supported neural routes initially: `1,7,11,12,17,25,26,28,50`. Route 5 is excluded under the current no-label-history assumption and uses a separate zero submission fallback. During preprocessing check this assumption: if route 5 has supplied labels, report the conflict rather than silently changing route policy. Require each configured neural route to have some labels in its fitting period; otherwise fail with a diagnostic.
 
-Generate every eligible identity once. With January 1–August 31 (243 days), complete 21-day histories, and all nine routes eligible, lead h has `223-h` cutoffs per route. Expect 11,712 identities per route, 105,408 total. These are structural counts, not independent observations. For final refit (304 days), expect 15,433 per route, 138,897 total. Assert counts on a synthetic complete grid; real eligibility conflicts must be reported.
+Generate every route/cutoff context once, retaining shorter request groups near
+the fitting boundary. January–August (243 days, nine routes) provides 1,998
+contexts. Lead h has `223-h` cutoffs per route. Seven-day training has 13,797
+requested-day targets; horizon 61 has 105,408. Final refit (304 days) provides
+2,547 contexts, 17,640 seven-day targets or 138,897 at horizon 61. These are
+structural counts, not independent observations.
 
-Each epoch shuffles the complete identity index without replacement using seed `67 + epoch`; `drop_last=False`. Histories and target days may repeat across distinct identities. Do not balance leads through oversampling in v1. Report identity counts by lead because this scheme gives longer leads fewer examples.
+Each epoch shuffles contexts without replacement using seed `67 + epoch`, keeping
+the final partial batch. Each context is encoded once per forward pass. Targets
+may repeat across contexts. Do not oversample leads; weight loss and accumulation
+by requested-day count so shorter groups near the split are not overweighted.
 
 ## 3. Package and interfaces
 
@@ -64,7 +74,11 @@ predict_day(encoded_history, route_indices, request_calendar, lead) -> Tensor[B,
 forward(history_batch, request_batch) -> Tensor[B, 24]
 ```
 
-All returned predictions are in original boarding units. `forward` composes the other methods. The model input type contains no future target; training targets are a separate batch member.
+All returned predictions are in original boarding units. With B contexts and R
+requested days, grouped `forward` uses `context_indices [R]` to select encoded
+histories, then predicts `[R,24]` with route IDs `[R]`, calendars `[R,4]` and leads
+`[R]`. Omitting context indices preserves the one-request-per-context API above.
+Targets are a separate `[R,24]` batch member and never enter the encoder.
 
 ## 4. Essential preprocessing and disk format
 
@@ -179,7 +193,7 @@ Embedding count = `Σ (retained_categories_i+3)*embedding_dim_i + 10*8`. At all 
 
 ## 8. Ragged events and bounded training memory
 
-Default batch size 1, accumulation 8. Default event chunk limits: at most 32 hour sequences and at most 32,768 padded event positions (`H*Npad`) per chunk. Sort nonempty hours by `(length, original_flat_hour_index)` for packing; greedily take hours while both limits hold, then restore original ordering through scatter. Do not reorder events inside an hour. Padded categorical IDs are zero; lengths/masks define validity.
+Default batch size 1 context, accumulation 8 context microbatches. Default event chunk limits: at most 32 hour sequences and at most 32,768 padded event positions (`H*Npad`) per chunk. Sort nonempty hours by `(length, original_flat_hour_index)` for packing; greedily take hours while both limits hold, then restore original ordering through scatter. Do not reorder events inside an hour. Padded categorical IDs are zero; lengths/masks define validity.
 
 Forward chunking alone is insufficient: default training MUST checkpoint each chunk's **embedding → E1 → E2 → masked max** function with `torch.utils.checkpoint.checkpoint(..., use_reentrant=False)`. Pass compact integer IDs/lengths as checkpoint inputs, construct embeddings inside the checkpoint, and avoid retaining embedded tensors in Python lists. Store only pooled outputs and compact inputs for recomputation. Verify gradients reach embeddings; integer inputs requiring no gradients must not disable training. Checkpointing is disabled under inference/no_grad.
 
@@ -196,18 +210,18 @@ Test tiled and untiled outputs AND gradients. Packing and tiling are execution s
 
 Default precision float32. AMP is optional only after masked reductions/checkpointed backward are verified; no silent precision change. Measure full-step CUDA peak allocated/reserved memory when CUDA is used, and process RSS on CPU. Exercise both a typical real batch and the busiest indexed history. On OOM lower chunk limits/batch size, preserving all events and the model; record the revised settings. Do not automatically change architecture.
 
-No persistent cache of learned event/history vectors during training: encoder weights change. Inference in eval mode may cache one `[1,672]` history vector per route/cutoff and reuse it for all 61 requests.
+No persistent cache of learned event/history vectors during training: encoder weights change. Inference in eval mode may cache one `[1,672]` history vector per route/cutoff and reuse it for all configured requested days.
 
 ## 9. Training and evaluation defaults
 
 - Seed 67 for Python/NumPy/PyTorch; record device/library versions. Request deterministic operations where available, report unsupported cases.
 - Optimizer AdamW, lr=0.001, betas=(0.9,0.999), eps=1e-8, weight_decay=0.0001 on trainable parameters. No scheduler initially.
 - Objective original-unit MAE: `abs(prediction-target).mean()` across sample/hour dimensions. This directly matches the numerator of global WAPE for a fixed evaluation set.
-- Gradient accumulation: combine sample loss sums, normalize by the actual number of samples in the accumulation group (including the final partial group), then clip global gradient norm at 1.0 and step. Do not underweight the final partial group or overweight smaller batches.
+- Gradient accumulation: combine requested-day loss sums, normalize by the actual number of requested days in the accumulation group (including the final partial group), then clip global gradient norm at 1.0 and step. Do not underweight the final partial group or overweight smaller batches.
 - Maximum 30 complete epochs, validation once per epoch, early stopping after five consecutive epochs without strictly lower global neural-route validation WAPE. Best checkpoint is minimum WAPE; ties retain the earlier epoch. Configurable short smoke mode is not a full training result.
-- Fixed-cutoff validation encodes each route once in eval mode and requests all 61 days. It must not update history with September/October observations.
+- Fixed-cutoff validation encodes each route once in eval mode and requests the configured horizon (seven days initially). It must not update history with September/October observations.
 - Report global WAPE by summing absolute errors and actual counts before division. Never average batch or route WAPEs to obtain global WAPE. If denominator is zero, return JSON null plus reason, and report absolute error separately.
-- Report per-route, per-lead (1..61), and grouped leads 1–7, 8–14, 15–30, 31–61; include denominators. Report MAE too.
+- Report per-route, per-lead (1..forecast_days), and grouped leads 1–7, 8–14, 15–30, 31–61 clipped to the configured horizon; include denominators. Report MAE too.
 - Report full-grid score with route-5 fallback separately from neural-route selection metric. Keep the baseline/full comparison on identical keys. `WAPE-score=max(0,1-WAPE)` is optional additional reporting.
 
 Baselines:
@@ -220,11 +234,11 @@ No accuracy claim until these runs exist. Do not select settings using hidden No
 
 ## 10. Persistence, inference, and submission
 
-Save best and latest checkpoints containing model state, optimizer state, epoch/step, best metric, early-stopping counter, RNG states, complete resolved configuration, vocabulary/scaler artifacts or validated hashes, route mapping, fitting boundaries, and preprocessing artifact version. Support epoch-boundary resume; explicitly reject an incompatible checkpoint/artifact combination. Do not imply exact mid-epoch resume unless sampler position and accumulation state are implemented.
+Save best and latest checkpoints containing model state, optimizer state, epoch/step, best metric, early-stopping counter, RNG states, complete resolved configuration, vocabulary/scaler artifacts or validated hashes, route mapping, fitting boundaries, and preprocessing artifact version. Persist `training.forecast_days` and the grouped training layout. Legacy checkpoints without a horizon retain 61-day inference semantics but cannot resume grouped training. Changing horizon requires a fresh run. Support epoch-boundary resume; explicitly reject an incompatible checkpoint/artifact combination. Do not imply exact mid-epoch resume unless sampler position and accumulation state are implemented.
 
-Inference runs eval/no_grad. Encode October 11–31 once per neural route; request each November/December day with correct lead. Generate route 5 as zero separately. Preserve the template key order and replace predictions; template baseline values are not labels or inputs.
+Inference runs eval/no_grad. Encode October 11–31 once per neural route; request each day of the checkpoint horizon with correct lead (November 1–7 initially). Generate route 5 as zero separately. Preserve the template key order and replace predictions; template baseline values are not labels or inputs.
 
-Submission UTF-8 semicolon CSV header: `route;date;hour;prediction`. Exactly 14,640 unique keys, 10 listed routes × 61 dates × 24 hours; finite nonnegative numeric predictions, no index column. Write floating-point predictions without manual rounding; dataset scoring handles rounding. Reject missing/extra/duplicate template keys. Atomically publish outputs and save checkpoint/config provenance alongside the CSV.
+Submission UTF-8 semicolon CSV header: `route;date;hour;prediction`. Exactly `10 * forecast_days * 24` unique keys (1,680 initially; 14,640 for the full competition horizon); finite nonnegative numeric predictions, no index column. Write floating-point predictions without manual rounding; dataset scoring handles rounding. Reject missing/extra/duplicate template keys. Atomically publish outputs and save checkpoint/config provenance alongside the CSV.
 
 ## 11. Acceptance tests and implementation gates
 
@@ -235,7 +249,7 @@ Use small synthetic fixtures to check behavior, not merely duplicate formulas in
 - Unsorted transactions and tied timestamps produce deterministic route-hour sequences; raw file boundaries do not determine date eligibility.
 - Empty fields, rare training categories and unseen evaluation categories map to their distinct intended IDs. Changes to held-out category values cannot change fitted training mappings/scaling.
 - Label duplicates, invalid hours/counts/timestamps fail visibly.
-- Lead 1/61, first valid cutoff, last valid target, and month boundaries satisfy exact intervals; September labels cannot enter training inputs/targets.
+- Leads 1/7 and expanded horizon 61, partial target groups, first valid cutoff, last valid target, and month boundaries satisfy exact intervals; September labels cannot enter training inputs/targets.
 - Identity enumeration counts match Section 2; an epoch visits all identities exactly once.
 - Both branches and calendar features reference identical route-hour keys, including zero-filled hours.
 
@@ -285,9 +299,9 @@ python -m tram_forecast train --config configs/default.json --artifact outputs/p
 python -m tram_forecast evaluate --checkpoint PATH --artifact outputs/prepared/validation
 python -m tram_forecast prepare --config configs/default.json --regime final
 python -m tram_forecast refit --selected-checkpoint PATH --artifact outputs/prepared/final
-python -m tram_forecast predict --checkpoint PATH --artifact outputs/prepared/final --template dataset/test_submission.csv --output outputs/submission.csv
+python -m tram_forecast predict --checkpoint PATH --artifact outputs/prepared/final --template outputs/template_7days.csv --output outputs/forecast_7days.csv
 ```
 
-Default data paths: `dataset/train.csv`, `dataset/test.csv`, `dataset/labels/labels_day_train.csv`, `dataset/labels/labels_day_test.csv`. Verify existence rather than substituting excerpts. `prepare --regime validation` can read both raw files to assign timestamp tails correctly but must only fit/store training-period raw history; held-out labels are stored separately for evaluation. `prepare --regime final` uses the January–October timestamp interval. `inspect` reads artifact metadata/array shapes without a fresh full-data scan. `smoke` runs correctness/resource checks and a small number of training steps, not 30 epochs. Evaluation includes the weekly-profile baseline automatically.
+Default data paths: `dataset/train.csv`, `dataset/test.csv`, `dataset/labels/labels_day_train.csv`, `dataset/labels/labels_day_test.csv`. Verify existence rather than substituting excerpts. `prepare --regime validation` can read both raw files to assign timestamp tails correctly but must only fit/store training-period raw history; held-out labels are stored separately for evaluation. `prepare --regime final` uses the January–October timestamp interval. `inspect` reads artifact metadata/array shapes without a fresh full-data scan. `smoke` runs forward/backward checks for one context and all configured requested days, without optimizer steps. Evaluation includes the weekly-profile baseline automatically.
 
 Final implementation report: changed files, exact model counts, gates passed, memory/time measurements, commands to run next, and any concrete blocker. Clearly distinguish implemented code, fixture-verified behavior, real-data checks, and experiments not yet run.

@@ -52,11 +52,13 @@ def test_baseline_network_and_fixed_evaluation(prepared):
     assert not hasattr(model, "events") and not hasattr(model, "raw")
     dataset = ForecastDataset(path, "boarding_only")
     inputs, request, target = collate_samples([dataset[0]])
-    assert "hours" not in inputs and model(inputs, request).shape == (1, 24)
+    assert "hours" not in inputs and model(inputs, request).shape == (7, 24)
     expected = fixed_forecast(model, store, 28)
     report = evaluate_model(model, store)
-    assert report["neural"]["global"]["positions"] == 28 * 24
-    assert report["full_grid_with_route5"]["global"]["positions"] == 2 * 28 * 24
+    assert report["forecast_days"] == 7
+    assert report["neural"]["global"]["positions"] == 7 * 24
+    assert report["full_grid_with_route5"]["global"]["positions"] == 2 * 7 * 24
+    assert evaluate_model(model, store, 28)["neural"]["global"]["positions"] == 28 * 24
     assert weekly_profile(store, 28).shape == (1, 28, 24)
     # Held-out target edits alter metrics but never predictions/history.
     evaluation = np.load(path / "evaluation.npy")
@@ -199,7 +201,10 @@ def test_training_control_flow_without_training(prepared, tmp_path):
         patch("tram_forecast.train.ForecastDataset", return_value=dataset),
         patch("tram_forecast.train.ForecastNetwork", return_value=model),
         patch("tram_forecast.train.torch.optim.AdamW", return_value=optimizer),
-        patch("tram_forecast.train.collate_samples", return_value=({}, {}, None)),
+        patch(
+            "tram_forecast.train.collate_samples",
+            side_effect=lambda samples, device: ({}, {}, torch.zeros(len(samples) * 7, 24)),
+        ),
         patch("tram_forecast.train.mae", return_value=loss),
         patch("tram_forecast.train.normalize_gradients") as normalization,
         patch("tram_forecast.train.torch.nn.utils.clip_grad_norm_"),
@@ -215,7 +220,7 @@ def test_training_control_flow_without_training(prepared, tmp_path):
         result = train(settings, artifact, "boarding_only", tmp_path / "run")
     assert result.name == "best.pt"
     assert optimizer.step.call_count == 4  # Spy only; no real optimizer exists.
-    assert [call.args[1] for call in normalization.call_args_list] == [4, 1, 4, 1]
+    assert [call.args[1] for call in normalization.call_args_list] == [28, 7, 28, 7]
     assert [name for name, _ in saved] == ["latest.pt", "best.pt", "latest.pt"]
     assert saved[-1][1]["epoch"] == 2 and saved[-1][1]["best_epoch"] == 1
 

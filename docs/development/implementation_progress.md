@@ -2,6 +2,34 @@
 
 Track execution of [implementation_steps.md](implementation_steps.md). Technical requirements remain in [architecture_implementation_plan.md](../architecture/architecture_implementation_plan.md).
 
+## Training notebook and legacy installer — 2026-09-26
+
+- **Notebook: Done.** Added `notebooks/train.ipynb` with editable run configuration,
+  preparation/reuse, weekly baseline, resource checks, training/resume, learning
+  curves, best-checkpoint evaluation and forecast plots. Added the `notebook`
+  dependency extra and README launch instructions.
+- **Verification:** 43 tests passed in 6.04s; notebook schema validated with
+  nbformat. Fixture execution covers both model kinds using untrained checkpoint
+  doubles for training; no actual optimizer step or real-data preparation ran.
+- **Legacy installer: awaiting clarification.** The requested “CUDA 1.12” is
+  ambiguous between CUDA runtime versions and PyTorch 1.12. Select the wheel and
+  Python compatibility range once the CUDA version/GPU target is identified.
+
+## Seven-day shared-context refactor — 2026-09-26
+
+**Status:** Done
+
+- User-approved scope: configurable forecast horizon, initially seven days for all models; encode each training context once for multiple requested days.
+- Group route/cutoff contexts, retain partial horizons at the fitting boundary, and weight loss/accumulation by requested days.
+- Persist the horizon in checkpoints, use it in evaluation/refit/export, and reject mixed-horizon report comparisons or incompatible resume.
+- Update the current README/specification and verify shared-context predictions and gradients, boundary behavior, and seven-day export on fixtures.
+- **Verification:** `.venv/bin/python -m pytest -q` — 40 passed in 4.14s on CPU. Shared-context values and parameter gradients match individual requests for both model variants, with event checkpointing enabled. Tests cover partial-horizon weighting, held-out targets beyond day 7, checkpoint-driven 7/14-day evaluation, incompatible resume, mixed-horizon comparison rejection, and 7/61-day exports.
+- **Additional checks:** Default `check-config` and `git diff --check` passed. Installed project/test dependencies into the ignored local `.venv`; no actual optimizer training run was performed.
+- Real-data preparation, full training and empirical forecast quality remain unmeasured.
+
+The numbered completion records below describe the original implementation pass;
+the refactor entry above supersedes its individual-request and 61-day defaults.
+
 ## Update rules
 
 - Start each step with status **In progress**.

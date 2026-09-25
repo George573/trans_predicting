@@ -155,6 +155,7 @@
     "min_free_disk_bytes": 1000000000
   },
   "training": {
+    "forecast_days": 7,
     "batch_size": 1,
     "accumulation": 8,
     "epochs": 30,

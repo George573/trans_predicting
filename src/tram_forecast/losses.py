@@ -1,4 +1,4 @@
-"""Original-unit objective and sample-weighted accumulation."""
+"""Original-unit objective and requested-day-weighted accumulation."""
 
 import torch
 
@@ -9,7 +9,7 @@ def mae(prediction, target):
         or prediction.ndim != 2
         or prediction.shape[1] != 24
     ):
-        raise ValueError("loss expects matching [B,24] predictions/targets")
+        raise ValueError("loss expects matching [requests,24] predictions/targets")
     if not torch.isfinite(prediction).all() or not torch.isfinite(target).all():
         raise ValueError("nonfinite regression values")
     return (prediction - target).abs().mean()

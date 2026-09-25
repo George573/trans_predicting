@@ -6,7 +6,7 @@ import numpy as np
 import torch
 
 from .config import ROUTES
-from .dataset import collate_samples, history_sample
+from .dataset import collate_samples, history_sample, validate_horizon
 from .schema import SampleIdentity, request_calendar
 
 
@@ -51,6 +51,7 @@ def metric_report(actual, predicted, routes):
         report["leads"][str(i + 1)] = metrics(actual[:, i], predicted[:, i])
     for low, high in ((1, 7), (8, 14), (15, 30), (31, 61)):
         if low <= actual.shape[1]:
+            high = min(high, actual.shape[1])
             report["lead_groups"][f"{low}-{high}"] = metrics(
                 actual[:, low - 1 : high], predicted[:, low - 1 : high]
             )
@@ -76,9 +77,8 @@ def weekly_profile(store, days):
 
 
 @torch.no_grad()
-def fixed_forecast(model, store, days=61):
-    if not 1 <= days <= 61:
-        raise ValueError("forecast horizon must be 1..61 days")
+def fixed_forecast(model, store, days=7):
+    validate_horizon(days)
     model.eval()
     device = next(model.parameters()).device
     results = []
@@ -103,13 +103,16 @@ def fixed_forecast(model, store, days=61):
     return np.stack(results)
 
 
-def evaluate_model(model, store):
+def evaluate_model(model, store, days=7):
+    validate_horizon(days)
     if store.metadata["regime"] != "validation":
         raise ValueError("evaluation requires a validation artifact")
-    days = (date.fromisoformat(store.metadata["evaluation_end"]) - store.end).days
+    available = (date.fromisoformat(store.metadata["evaluation_end"]) - store.end).days
+    if days > available:
+        raise ValueError("forecast horizon exceeds available validation days")
     actual = np.asarray(store.evaluation_targets()).reshape(
-        len(store.routes) + 1, days, 24
-    )
+        len(store.routes) + 1, available, 24
+    )[:, :days]
     prediction = fixed_forecast(model, store, days)
     baseline = weekly_profile(store, days)
     zeros = np.zeros((1, days, 24), dtype=np.float32)
@@ -123,6 +126,7 @@ def evaluate_model(model, store):
             actual, np.concatenate((baseline, zeros)), (*store.routes, 5)
         ),
         "cutoff": str(store.end),
+        "forecast_days": days,
         "artifact": store.contract_hash,
         "model_kind": model.model_kind,
     }

@@ -24,12 +24,18 @@ from .settings import Settings
 
 def train(settings, artifact, model_kind="full", output=None, resume=None, final=False):
     seed_all(settings.model.seed)
-    dataset = ForecastDataset(artifact, model_kind)
+    dataset = ForecastDataset(artifact, model_kind, settings.training.forecast_days)
     store = dataset.store
     if store.metadata["regime"] != ("final" if final else "validation"):
         raise ValueError("training regime mismatch")
     if not len(dataset):
         raise ValueError("no eligible training identities")
+    if not final:
+        from datetime import date
+
+        available = (date.fromisoformat(store.metadata["evaluation_end"]) - store.end).days
+        if settings.training.forecast_days > available:
+            raise ValueError("forecast_days exceeds available validation days")
     preparation = store.metadata["identity"]
     expected_end = (
         settings.data.final_cutoff if final else settings.data.validation_cutoff
@@ -78,6 +84,8 @@ def train(settings, artifact, model_kind="full", output=None, resume=None, final
     stale = 0
     if resume:
         loaded, payload = load_model(resume, store, settings.training.device)
+        if payload.get("training_layout") != "grouped_contexts_v1":
+            raise ValueError("legacy training layout cannot resume; start a fresh run")
         old = Settings.from_dict(payload["settings"])
         old_training = old.to_dict()["training"]
         new_training = settings.to_dict()["training"]
@@ -128,7 +136,8 @@ def train(settings, artifact, model_kind="full", output=None, resume=None, final
             samples = [dataset[int(i)] for i in order[start : start + batch_size]]
             inputs, request, target = collate_samples(samples, settings.training.device)
             loss = mae(model(inputs, request), target)
-            count = len(samples)
+            # Weight each requested day equally, including partial end-of-period horizons.
+            count = target.shape[0]
             (loss * count).backward()
             accumulated += count
             microbatches += 1
@@ -152,7 +161,7 @@ def train(settings, artifact, model_kind="full", output=None, resume=None, final
         report = None
         improved = False
         if not final:
-            report = evaluate_model(model, store)
+            report = evaluate_model(model, store, settings.training.forecast_days)
             score = report["neural"]["global"]["wape"]
             if score is None:
                 raise ValueError(

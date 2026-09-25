@@ -91,17 +91,21 @@ def main(argv=None):
             payload = read_checkpoint(args.checkpoint)
             store = Store(args.artifact, events=payload["model_kind"] == "full")
             model, _ = load_model(args.checkpoint, store, args.device or "cpu")
-            result = evaluate_model(model, store)
+            result = evaluate_model(
+                model, store, payload["settings"]["training"]["forecast_days"]
+            )
         elif args.command == "compare":
             reports = [json.loads(Path(p).read_text()) for p in args.reports]
             if (
                 len({r["artifact"] for r in reports}) != 1
                 or len({r["cutoff"] for r in reports}) != 1
+                or len({r["forecast_days"] for r in reports}) != 1
             ):
                 raise ValueError(
-                    "comparison requires identical evaluation artifacts/cutoffs"
+                    "comparison requires identical evaluation artifacts/cutoffs/horizons"
                 )
             result = {
+                "forecast_days": reports[0]["forecast_days"],
                 "runs": [
                     {
                         "path": p,

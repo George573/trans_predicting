@@ -21,7 +21,8 @@ def test_preparation_dataset_and_reuse(prepared):
     assert store.evaluation_targets()[0, 0] == 10
     dataset = ForecastDataset(path)
     history, request, targets = collate_samples([dataset[0]])
-    assert targets.shape == (1, 24) and request["lead"].item() == 1
+    assert targets.shape == (7, 24) and request["lead"].tolist() == list(range(1, 8))
+    assert request["context_indices"].tolist() == [0] * 7
     assert len(history["hours"]) == 504
     assert prepare(settings, "validation") == path
     baseline = ForecastDataset(path, "boarding_only")

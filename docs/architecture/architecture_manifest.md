@@ -1,8 +1,14 @@
 # Tram Ridership Forecasting — Architecture Manifest
 
-Version: 1.0 • Date: 2026-09-25 • Status: design agreed; model not implemented.
+Version: 1.0 • Date: 2026-09-25 • Status: historical design, now implemented.
 
 Implementation clarification (2026-09-25): **every convolutional stage uses parallel paths with different kernel lengths and dilations**, including the event encoder and shared post-fusion compression stages. See [architecture_implementation_plan.md](architecture_implementation_plan.md) for the concrete v1.1 implementation specification, tensor contracts, defaults, updated parameter accounting, and acceptance gates. Its explicit settings resolve the open implementation choices below; the older PDF parameter formula does not apply to the clarified network.
+
+Current training protocol (2026-09-26): group requested days under one route/cutoff
+context, default to leads 1–7, and reuse the context representation within each
+forward pass. See the v1.2 implementation specification for current batch,
+evaluation and export contracts. The original 61-day design below remains the
+eventual competition horizon.
 
 ## Objective and model budget
 

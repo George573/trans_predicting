@@ -80,18 +80,22 @@ def predict(checkpoint, artifact, template, output, device="cpu"):
             "submission requires all neural routes in the final October artifact"
         )
     model, _ = load_model(checkpoint, store, device)
-    values = fixed_forecast(model, store, 61)
+    days = payload["settings"]["training"]["forecast_days"]
+    end = store.end + timedelta(days=days)
+    if end > date.fromisoformat(store.metadata["evaluation_end"]):
+        raise ValueError("forecast horizon exceeds the final artifact forecast period")
+    values = fixed_forecast(model, store, days)
     predictions = {}
     for i, route in enumerate(store.routes):
-        for d in range(61):
+        for d in range(days):
             for h in range(24):
                 predictions[route, store.end + timedelta(days=d), h] = float(
                     values[i, d, h]
                 )
-    for d in range(61):
+    for d in range(days):
         for h in range(24):
             predictions[5, store.end + timedelta(days=d), h] = 0.0
-    rows = write_submission(template, output, predictions)
+    rows = write_submission(template, output, predictions, store.end, end)
     sha = hashlib.sha256()
     with open(checkpoint, "rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
@@ -105,6 +109,7 @@ def predict(checkpoint, artifact, template, output, device="cpu"):
             "settings": payload["settings"],
             "rows": rows,
             "cutoff": str(store.end),
+            "forecast_days": days,
             "route5_fallback": 0,
         },
     )

@@ -1,4 +1,4 @@
-"""Compact sample identities; storage-backed loading will be added separately."""
+"""One stored history per context, with all eligible requested-day targets."""
 
 from datetime import timedelta
 
@@ -7,15 +7,21 @@ import numpy as np
 from .schema import SampleIdentity
 
 
-def sample_index(routes, start, end):
+def sample_index(routes, start, end, forecast_days=7):
+    validate_horizon(forecast_days)
     if end <= start:
         raise ValueError("end must follow start")
     return tuple(
         SampleIdentity(r, start + timedelta(days=c), start + timedelta(days=c + h - 1))
         for r in routes
         for c in range(21, (end - start).days)
-        for h in range(1, min(61, (end - start).days - c) + 1)
+        for h in range(1, min(forecast_days, (end - start).days - c) + 1)
     )
+
+
+def validate_horizon(days):
+    if type(days) is not int or not 1 <= days <= 61:
+        raise ValueError("forecast horizon must be an integer in 1..61 days")
 
 
 def epoch_order(size, epoch, seed=67):
@@ -25,37 +31,42 @@ def epoch_order(size, epoch, seed=67):
 
 
 class ForecastDataset:
-    """Identity-indexed memory-mapped histories; held-out targets are inaccessible."""
+    """Context-indexed histories; partial horizons never cross the fitting boundary."""
 
-    def __init__(self, artifact, model_kind="full"):
+    def __init__(self, artifact, model_kind="full", forecast_days=7):
         from .storage import Store
 
         if model_kind not in ("full", "boarding_only"):
             raise ValueError("unknown model kind")
         self.model_kind = model_kind
+        validate_horizon(forecast_days)
+        self.forecast_days = forecast_days
         self.store = Store(artifact, events=model_kind == "full")
-        # Three integer columns avoid hundreds of thousands of Python date objects.
+        # One identity per route/cutoff, regardless of the number of requested days.
         self.index = np.asarray(
             [
-                (r, c, h)
+                (r, c)
                 for r in self.store.routes
                 for c in range(21, (self.store.end - self.store.start).days)
-                for h in range(
-                    1, min(61, (self.store.end - self.store.start).days - c) + 1
-                )
             ],
             dtype=np.int32,
-        ).reshape(-1, 3)
+        ).reshape(-1, 2)
 
     def __len__(self):
         return len(self.index)
 
     def __getitem__(self, index):
-        route, c, h = map(int, self.index[index])
+        from .schema import request_calendar
+
+        route, c = map(int, self.index[index])
         cutoff = self.store.start + timedelta(days=c)
-        identity = SampleIdentity(route, cutoff, cutoff + timedelta(days=h - 1))
+        identity = SampleIdentity(route, cutoff, cutoff)
         result = history_sample(self.store, identity, self.model_kind == "full")
-        result["target"] = self.store.target(route, identity.requested)
+        days = min(self.forecast_days, (self.store.end - cutoff).days)
+        requested = [cutoff + timedelta(days=h) for h in range(days)]
+        result["lead"] = np.arange(1, days + 1, dtype=np.float32)
+        result["request_calendar"] = request_calendar(requested)
+        result["target"] = np.stack([self.store.target(route, day) for day in requested])
         return result
 
 
@@ -81,6 +92,7 @@ def history_sample(store, identity, include_events=True):
 
 
 def collate_samples(samples, device="cpu"):
+    """Batch B histories and flatten their R requests/targets with context indices."""
     import torch
 
     if not samples:
@@ -101,18 +113,28 @@ def collate_samples(samples, device="cpu"):
             torch.from_numpy(hour) for s in samples for hour in s["hours"]
         ]
     request = {
+        "context_indices": torch.tensor(
+            [i for i, s in enumerate(samples) for _ in np.atleast_1d(s["lead"])],
+            device=device,
+        ),
         "route_indices": torch.tensor(
-            [s["route_index"] for s in samples], device=device
+            [s["route_index"] for s in samples for _ in np.atleast_1d(s["lead"])],
+            device=device,
         ),
         "calendar": torch.as_tensor(
-            np.stack([s["request_calendar"] for s in samples]), device=device
+            np.concatenate([np.atleast_2d(s["request_calendar"]) for s in samples]),
+            device=device,
         ),
         "lead": torch.tensor(
-            [s["lead"] for s in samples], device=device, dtype=torch.float32
+            np.concatenate([np.atleast_1d(s["lead"]) for s in samples]),
+            device=device,
+            dtype=torch.float32,
         ),
     }
     targets = (
-        torch.as_tensor(np.stack([s["target"] for s in samples]), device=device)
+        torch.as_tensor(
+            np.concatenate([np.atleast_2d(s["target"]) for s in samples]), device=device
+        )
         if all("target" in s for s in samples)
         else None
     )
