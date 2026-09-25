@@ -262,6 +262,7 @@ def parking():
     occupancy = occupancy[occupancy.parking_id.isin(spots.id)]
     occupancy["time_msk"] = occupancy.time.dt.tz_convert("Europe/Moscow").dt.floor("h").dt.strftime("%Y-%m-%dT%H:%M")
     occupancy = occupancy[occupancy.time_msk.str.startswith(str(YEAR))]
+    occupancy["occupancy_rate"] = occupancy.occupancy_rate.clip(0, 100)
     hourly = occupancy.groupby(["parking_id", "time_msk"]).occupancy_rate.mean().round(1).reset_index()
     write_csv("parking_occupancy_hourly.csv", hourly.values.tolist(), ["parking_id", "time_msk", "occupancy_pct"])
     columns = ["id", "name_ru", "address_street_ru", "subway_ru", "latitude", "longitude", "common_spaces"]
