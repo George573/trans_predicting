@@ -41,6 +41,24 @@ For CPU-only PyTorch, install `torch` from the official
 install the appropriate official PyTorch wheel. Set `training.device` or pass
 `--device cuda`. GPU execution has not been validated here.
 
+For a **GTX 1080 (Pascal)**, use the legacy CUDA installer in your virtual environment:
+
+```bash
+.venv/bin/python tools/install.py --legacy-cuda --notebook --test
+```
+
+On Windows, use `.venv\Scripts\python.exe` instead. The installer pins
+`torch==2.14.0+cu126` from the official CUDA 12.6 wheel index, then installs the
+project while retaining that exact build. Your NVIDIA 580.178.04 driver can run
+this build. The CUDA 13.0 label in `nvidia-smi` describes driver capability;
+the wheel must also support the GPU architecture. See the
+[PyTorch Pascal support notice](https://dev-discuss.pytorch.org/t/notice-cuda-12-6-wheels-will-no-longer-be-published-from-pytorch-2-15-drops-maxwell-pascal-volta/3432).
+
+`--notebook` and `--test` are optional. Add `--dry-run` to preview the commands.
+Without `--legacy-cuda`, the script installs the project using normal pip
+dependency selection. The flag belongs to this script, not to pip. Use the
+legacy flag again when installing additional extras through this script.
+
 All commands below assume the environment is activated. Commands that perform
 training are implemented but were **not run** during this code-only delivery.
 Tests use temporary synthetic CSVs and untrained weights; backward checks do not
