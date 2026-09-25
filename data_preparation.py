@@ -81,6 +81,41 @@ def load_dataset(
     return df
 
 
+def load_labels(
+    labels_path: str,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    dense: bool = True,
+    routes: tuple[int, ...] | None = None,
+) -> pl.DataFrame:
+    """Готовая почасовая разметка из dataset/labels.
+
+    Это те же агрегаты, что считает load_dataset из сырых CSV, но читаются за доли
+    секунды вместо минут. Полезно для быстрых экспериментов; финальные прогоны
+    имеет смысл сверять с load_dataset.
+    """
+    df = (
+        pl.read_csv(labels_path, separator=';', try_parse_dates=True)
+        .rename({"boardings": "target"})
+        .select(["date", "hour", "route", "target"])
+        .with_columns(
+            pl.col("hour").cast(pl.Int8),
+            pl.col("route").cast(pl.Int32),
+            pl.col("target").cast(pl.Int32),
+        )
+    )
+
+    if start_date is not None:
+        df = df.filter(pl.col("date") >= start_date)
+    if end_date is not None:
+        df = df.filter(pl.col("date") <= end_date)
+
+    if dense:
+        df = densify(df, start_date, end_date, routes)
+
+    return df
+
+
 def enrich_features(
     base_df: pl.DataFrame,
     calendar_df: pl.DataFrame

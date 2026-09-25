@@ -1,0 +1,154 @@
+{
+  "model": "harmonic regression (Fourier + calendar, per route)",
+  "spec": {
+    "k_day": 12,
+    "k_week": 8,
+    "daytype_inter": true,
+    "trend": false,
+    "daylight": false,
+    "kind": "poisson",
+    "alpha": 0.00018900838568921904,
+    "window_days": null
+  },
+  "routes": [
+    1,
+    5,
+    7,
+    11,
+    12,
+    17,
+    25,
+    26,
+    28,
+    50
+  ],
+  "train_period": [
+    "2025-01-01",
+    "2025-10-31"
+  ],
+  "cv_wape": 0.17267624364623083,
+  "cv_per_fold": {
+    "fold0_wape": 0.130653292019477,
+    "fold1_wape": 0.26157399133862574,
+    "fold2_wape": 0.12580144758058978
+  },
+  "route_calibration": {
+    "1": 1.0743061936920255,
+    "5": 1.0,
+    "7": 1.0059141676291656,
+    "11": 1.0380672655002459,
+    "12": 1.0251791761673803,
+    "17": 1.0709703518207074,
+    "25": 1.1746627270425272,
+    "26": 1.0940571286979193,
+    "28": 1.0557939245440335,
+    "50": 0.8916141037053106
+  },
+  "use_calibration": true,
+  "dead_route_hour_pairs": [
+    {
+      "route": 5,
+      "hour": 4
+    },
+    {
+      "route": 5,
+      "hour": 20
+    },
+    {
+      "route": 5,
+      "hour": 10
+    },
+    {
+      "route": 5,
+      "hour": 19
+    },
+    {
+      "route": 5,
+      "hour": 15
+    },
+    {
+      "route": 5,
+      "hour": 11
+    },
+    {
+      "route": 5,
+      "hour": 12
+    },
+    {
+      "route": 5,
+      "hour": 18
+    },
+    {
+      "route": 25,
+      "hour": 2
+    },
+    {
+      "route": 5,
+      "hour": 16
+    },
+    {
+      "route": 5,
+      "hour": 13
+    },
+    {
+      "route": 25,
+      "hour": 3
+    },
+    {
+      "route": 5,
+      "hour": 3
+    },
+    {
+      "route": 5,
+      "hour": 23
+    },
+    {
+      "route": 5,
+      "hour": 22
+    },
+    {
+      "route": 5,
+      "hour": 17
+    },
+    {
+      "route": 5,
+      "hour": 5
+    },
+    {
+      "route": 5,
+      "hour": 0
+    },
+    {
+      "route": 5,
+      "hour": 1
+    },
+    {
+      "route": 5,
+      "hour": 21
+    },
+    {
+      "route": 5,
+      "hour": 2
+    },
+    {
+      "route": 5,
+      "hour": 6
+    },
+    {
+      "route": 5,
+      "hour": 9
+    },
+    {
+      "route": 5,
+      "hour": 8
+    },
+    {
+      "route": 5,
+      "hour": 7
+    },
+    {
+      "route": 5,
+      "hour": 14
+    }
+  ]
+}
