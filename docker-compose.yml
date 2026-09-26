@@ -1,0 +1,24 @@
+services:
+  runner:
+    build:
+      context: .
+      target: runner
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      start_interval: 1s
+
+  server:
+    build:
+      context: .
+      target: server
+    command: ["-runner", "http://runner:8000", "-auth", "${STAND_AUTH:-}"]
+    ports:
+      - "127.0.0.1:8090:8080"
+    depends_on:
+      runner:
+        condition: service_healthy
+    restart: unless-stopped

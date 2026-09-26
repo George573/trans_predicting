@@ -20,6 +20,8 @@ history; a boarding-only model and weekly-profile baseline are also provided.
 | `tools/` | Optional standalone profiling tools; not required by the package |
 | `dataset/README.md` | Dataset rules; actual data remains local and ignored |
 | `outputs/` | Ignored preparation artifacts, checkpoints, metrics and submissions |
+| `bench/go-inference-stand/` | Go API and dispatcher UI that query the ONNX runner |
+| `Dockerfile`, `docker-compose.yml` | Runner and UI images; the checkpoint is exported to ONNX at build time |
 
 [Implementation specification](docs/architecture/architecture_implementation_plan.md)
 · [Steps](docs/development/implementation_steps.md)
@@ -227,3 +229,18 @@ revision. It documents the full computation graph, every multiscale path, tempor
 support, exact event tiling, embeddings and the fixed-cutoff evaluation protocol.
 The user-supplied TFT visual reference is kept locally in
 `experiments/references/tft_diagram_reference.png`.
+
+## Forecast service
+
+A boarding-only checkpoint is served by two containers. `runner` executes the network
+with ONNX Runtime, without PyTorch; `server` is the Go API with the dispatcher UI.
+
+```bash
+docker compose up -d --build   # http://127.0.0.1:8090
+```
+
+The build expects `outputs/boarding_only_61days_v5_final/final.pt` (override with
+`--build-arg CHECKPOINT=...`) and `dataset/labels/labels_day_test.csv`, the source of the
+October 11-31 history. The Docker build runs `python -m tram_forecast export-onnx`; the
+runner image starts `python -m tram_forecast serve`. Set `STAND_AUTH=user:pass` to enable
+basic auth. Details: [bench/go-inference-stand/README.md](bench/go-inference-stand/README.md).
