@@ -5,34 +5,43 @@ import math
 import torch
 from torch import nn
 
-from .config import HISTORY_DAYS
+
+class ParallelConv1d(nn.Module):
+    """Several dilated Conv1d branches over the same input, concatenated by channel."""
+
+    def __init__(self, params):
+        super().__init__()
+        self.branches = nn.ModuleList(
+            nn.Conv1d(in_c, out_c, k_size, dilation=dilation, padding="same")
+            for in_c, out_c, k_size, dilation in params
+        )
+
+    def forward(self, x):
+        return torch.cat([branch(x) for branch in self.branches], dim=1)
 
 
 class ForecastNetwork(nn.Module):
-    history_hours = HISTORY_DAYS * 24
-    encoded_width = 16 * 42
-    model_kind = "boarding_only"
-
     def __init__(self, scale):
         super().__init__()
         if not math.isfinite(scale) or scale < 1:
             raise ValueError("scale must be finite and >=1")
         self.register_buffer("scale", torch.tensor(float(scale)))
+
         self.encoder = nn.Sequential(
-            nn.Conv1d(7, 32, kernel_size=5, padding=2),
+            nn.Conv1d(7, 32, kernel_size=35, padding="same", dilation=2),
             nn.GELU(),
-            nn.MaxPool1d(2),                 # 504 -> 252 hours
-            nn.Conv1d(32, 32, kernel_size=5, padding=2),
+            nn.Dropout(0.2),
+            nn.Conv1d(32, 16, kernel_size=35, padding="same"),
             nn.GELU(),
-            nn.MaxPool1d(2),                 # 252 -> 126 hours
-            nn.Conv1d(32, 16, kernel_size=3, padding=1),
+            nn.Dropout(0.2),
+            nn.Conv1d(16, 1, kernel_size=24, padding="same"),
             nn.GELU(),
-            nn.MaxPool1d(3),                 # 126 -> 42 hours
-            nn.Flatten(1),                   # 16 * 42 = 672 features
+            nn.Dropout(0.2),
+            nn.Flatten(1),  # 504 hours, 1 channel -> 504 features
         )
         self.route = nn.Embedding(10, 8)
         self.head = nn.Sequential(
-            nn.Linear(672 + 8 + 4 + 1, 250),  # history, route, calendar, lead
+            nn.Linear(504 + 8 + 4 + 1, 250),  # history, route, calendar, lead
             nn.GELU(),
             nn.Dropout(0.1),
             nn.Linear(250, 24),
@@ -41,24 +50,9 @@ class ForecastNetwork(nn.Module):
 
     def encode_history(self, history):
         counts, calendar = history["counts"], history["calendar"]
-        b = counts.shape[0]
-        if counts.shape != (b, 1, 504) or calendar.shape != (b, 6, 504):
-            raise ValueError("history must cover exactly 504 aligned hours")
         return self.encoder(torch.cat((counts / self.scale, calendar), dim=1))
 
     def predict_day(self, encoded_history, route_indices, request_calendar, lead):
-        b = encoded_history.shape[0]
-        if (
-            encoded_history.shape != (b, self.encoded_width)
-            or route_indices.shape != (b,)
-            or request_calendar.shape != (b, 4)
-            or lead.shape != (b,)
-        ):
-            raise ValueError("invalid request tensor shapes")
-        if (route_indices < 1).any() or (route_indices > 9).any():
-            raise ValueError("unsupported neural route index")
-        if (lead < 1).any() or (lead > 61).any() or (lead != lead.round()).any():
-            raise ValueError("lead must be an integer in 1..61")
         x = torch.cat(
             (
                 encoded_history,
@@ -68,26 +62,15 @@ class ForecastNetwork(nn.Module):
             ),
             dim=1,
         )
-        return (
-            torch.nn.functional.softplus(self.head(x), beta=1, threshold=20)
-            * self.scale
-        )
+        return torch.nn.functional.softplus(self.head(x), beta=1, threshold=20) * self.scale
 
     def forward(self, history, request):
         encoded = self.encode_history(history)
         indices = request.get("context_indices")
         if indices is not None:
-            if (
-                indices.ndim != 1
-                or indices.dtype != torch.long
-                or (indices < 0).any()
-                or (indices >= encoded.shape[0]).any()
-            ):
-                raise ValueError("invalid request context indices")
             encoded = encoded.index_select(0, indices)
         return self.predict_day(
-            encoded, request["route_indices"], request["calendar"],
-            request["lead"],
+            encoded, request["route_indices"], request["calendar"], request["lead"],
         )
 
     def parameter_report(self):

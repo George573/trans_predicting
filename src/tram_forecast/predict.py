@@ -1,116 +1,75 @@
-"""Validated submission export, with route 5 outside the neural model."""
+"""Submission export."""
 
 import csv
-import hashlib
 import math
 import os
 import tempfile
 from datetime import date, timedelta
 from pathlib import Path
 
-from .checkpoint import load_model
-from .config import ROUTES
-from .evaluate import fixed_forecast
-from .io import write_json
-from .data import Store
+import numpy as np
+import torch
+
+from .data import ROUTES, sample
 
 
-def submission_keys(start=date(2025, 11, 1), end=date(2026, 1, 1)):
-    return {
+@torch.no_grad()
+def fixed_forecast(model, boardings, cutoff, days):
+    model.eval()
+    device = next(model.parameters()).device
+    results = []
+    for route in boardings.routes:
+        s = sample(boardings, route, cutoff, days)
+        history = {
+            "counts": torch.as_tensor(s["counts"][None], device=device, dtype=torch.float32),
+            "calendar": torch.as_tensor(s["calendar"][None], device=device, dtype=torch.float32),
+        }
+        encoded = model.encode_history(history)
+        route_indices = torch.full((days,), ROUTES.index(route) + 1, device=device, dtype=torch.long)
+        calendar_tensor = torch.as_tensor(s["request_calendar"], device=device, dtype=torch.float32)
+        lead = torch.as_tensor(s["lead"], device=device)
+        prediction = model.predict_day(encoded.expand(days, -1), route_indices, calendar_tensor, lead)
+        results.append(prediction.cpu().numpy())
+    return np.stack(results)
+
+
+def write_submission(template, output, predictions, start, end):
+    expected = {
         (r, start + timedelta(days=d), h)
         for r in (*ROUTES, 5)
         for d in range((end - start).days)
         for h in range(24)
     }
-
-
-def write_submission(
-    template, output, predictions, start=date(2025, 11, 1), end=date(2026, 1, 1)
-):
-    expected = submission_keys(start, end)
     if set(predictions) != expected:
         raise ValueError("prediction keys must cover the complete submission grid")
-    if any(not math.isfinite(float(v)) or v < 0 for v in predictions.values()):
-        raise ValueError("predictions must be finite/nonnegative")
     ordered = []
-    seen = set()
     with open(template, encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle, delimiter=";")
-        if reader.fieldnames != ["route", "date", "hour", "prediction"]:
-            raise ValueError("unexpected template columns/order")
         for row in reader:
-            key = (int(row["route"]), date.fromisoformat(row["date"]), int(row["hour"]))
-            if key not in expected or key in seen:
-                raise ValueError("extra or duplicate template key")
-            seen.add(key)
-            ordered.append(key)
-    if seen != expected:
-        raise ValueError("missing template keys")
+            ordered.append(
+                (int(row["route"]), date.fromisoformat(row["date"]), int(row["hour"]))
+            )
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     fd, name = tempfile.mkstemp(prefix=".submission-", dir=output.parent)
-    try:
-        with os.fdopen(fd, "w", newline="", encoding="utf-8") as handle:
-            writer = csv.writer(handle, delimiter=";")
-            writer.writerow(["route", "date", "hour", "prediction"])
-            for r, d, h in ordered:
-                writer.writerow(
-                    [r, d.isoformat(), h, format(float(predictions[r, d, h]), ".10g")]
-                )
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(name, output)
-    finally:
-        if os.path.exists(name):
-            os.unlink(name)
+    with os.fdopen(fd, "w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle, delimiter=";")
+        writer.writerow(["route", "date", "hour", "prediction"])
+        for r, d, h in ordered:
+            writer.writerow([r, d.isoformat(), h, format(float(predictions[r, d, h]), ".10g")])
+    os.replace(name, output)
     return len(ordered)
 
 
-def predict(checkpoint, artifact, template, output, device="cpu"):
-    from .checkpoint import read_checkpoint
-
-    payload = read_checkpoint(checkpoint)
-    store = Store(artifact)
-    if (
-        store.metadata["regime"] != "final"
-        or store.end != date(2025, 11, 1)
-        or set(store.routes) != set(ROUTES)
-    ):
-        raise ValueError(
-            "submission requires all neural routes in the final October artifact"
-        )
-    model, _ = load_model(checkpoint, store, device)
-    days = payload["settings"]["training"]["forecast_days"]
-    end = store.end + timedelta(days=days)
-    if end > date.fromisoformat(store.metadata["evaluation_end"]):
-        raise ValueError("forecast horizon exceeds the final artifact forecast period")
-    values = fixed_forecast(model, store, days)
-    predictions = {}
-    for i, route in enumerate(store.routes):
-        for d in range(days):
-            for h in range(24):
-                predictions[route, store.end + timedelta(days=d), h] = float(
-                    values[i, d, h]
-                )
+def predict(model, boardings, template, output, cutoff, days):
+    values = fixed_forecast(model, boardings, cutoff, days)
+    predictions = {
+        (route, cutoff + timedelta(days=d), h): float(values[i, d, h])
+        for i, route in enumerate(boardings.routes)
+        for d in range(days)
+        for h in range(24)
+    }
     for d in range(days):
         for h in range(24):
-            predictions[5, store.end + timedelta(days=d), h] = 0.0
-    rows = write_submission(template, output, predictions, store.end, end)
-    sha = hashlib.sha256()
-    with open(checkpoint, "rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            sha.update(chunk)
-    write_json(
-        str(output) + ".provenance.json",
-        {
-            "checkpoint": str(Path(checkpoint).resolve()),
-            "checkpoint_sha256": sha.hexdigest(),
-            "artifact_hash": store.contract_hash,
-            "settings": payload["settings"],
-            "rows": rows,
-            "cutoff": str(store.end),
-            "forecast_days": days,
-            "route5_fallback": 0,
-        },
-    )
-    return Path(output)
+            predictions[5, cutoff + timedelta(days=d), h] = 0.0
+    return write_submission(template, output, predictions, cutoff, cutoff + timedelta(days=days))
