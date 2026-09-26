@@ -4,7 +4,7 @@ RUN pip install --no-cache-dir torch==2.14.0 --index-url https://download.pytorc
 WORKDIR /app
 COPY src src
 COPY dataset/labels/labels_day_test.csv dataset/labels/
-ARG CHECKPOINT=outputs/boarding_only_61days_v5_final/final.pt
+ARG CHECKPOINT=outputs/runs/final/boarding_only/final.pt
 COPY ${CHECKPOINT} model.pt
 RUN PYTHONPATH=src python -m tram_forecast export-head --checkpoint model.pt \
     --labels dataset/labels/labels_day_test.csv --output head.json \
@@ -12,7 +12,7 @@ RUN PYTHONPATH=src python -m tram_forecast export-head --checkpoint model.pt \
 
 FROM golang:1.24-alpine AS build
 WORKDIR /src
-COPY bench/go-inference-stand .
+COPY service .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /server ./cmd/server
 
 FROM scratch

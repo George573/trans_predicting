@@ -1,7 +1,7 @@
 *
 !src/tram_forecast
-!bench/go-inference-stand
+!service
 !dataset/labels/labels_day_test.csv
 !outputs/**/*.pt
 **/__pycache__
-bench/go-inference-stand/bin
+service/bin

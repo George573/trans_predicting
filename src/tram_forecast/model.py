@@ -1,59 +1,50 @@
-"""Complete default network. Inputs contain observed history only."""
+"""A fixed CNN for 21 days of hourly boarding history."""
 
 import math
 
 import torch
 from torch import nn
 
-from ..config import Config
-from .blocks import MultiscaleConv1d
+from .config import HISTORY_DAYS
 
 
 class ForecastNetwork(nn.Module):
-    def __init__(self, scale, config=None, model_kind="boarding_only"):
+    history_hours = HISTORY_DAYS * 24
+    encoded_width = 16 * 42
+    model_kind = "boarding_only"
+
+    def __init__(self, scale):
         super().__init__()
-        self.config = config or Config()
-        if model_kind != "boarding_only":
-            raise ValueError("unknown model kind")
-        self.model_kind = model_kind
         if not math.isfinite(scale) or scale < 1:
             raise ValueError("scale must be finite and >=1")
         self.register_buffer("scale", torch.tensor(float(scale)))
-        self.history_hours = self.config.history_days * 24
-        hourly_width = sum(p[0] for p in self.config.hourly)
-        self.boarding = MultiscaleConv1d(7, self.config.hourly, self.config.hourly_stride)
-        layers = []
-        channels = hourly_width
-        length = (self.history_hours + self.config.hourly_stride - 1) // self.config.hourly_stride
-        pool = nn.MaxPool1d if self.config.temporal_pool == "max" else nn.AvgPool1d
-        stages = (self.config.shared1, self.config.shared2, self.config.shared3)
-        for paths, factor in zip(stages[:self.config.shared_depth], (2, 2, 3)):
-            layers.extend((MultiscaleConv1d(channels, paths), pool(factor, factor)))
-            channels = sum(p[0] for p in paths)
-            length //= factor
-        if self.config.pooled_hours is not None:
-            adaptive = nn.AdaptiveMaxPool1d if self.config.temporal_pool == "max" else nn.AdaptiveAvgPool1d
-            layers.append(adaptive(self.config.pooled_hours))
-            length = self.config.pooled_hours
-        self.shared = nn.Sequential(*layers)
-        self.encoded_width = channels * length
+        self.encoder = nn.Sequential(
+            nn.Conv1d(7, 32, kernel_size=5, padding=2),
+            nn.GELU(),
+            nn.MaxPool1d(2),                 # 504 -> 252 hours
+            nn.Conv1d(32, 32, kernel_size=5, padding=2),
+            nn.GELU(),
+            nn.MaxPool1d(2),                 # 252 -> 126 hours
+            nn.Conv1d(32, 16, kernel_size=3, padding=1),
+            nn.GELU(),
+            nn.MaxPool1d(3),                 # 126 -> 42 hours
+            nn.Flatten(1),                   # 16 * 42 = 672 features
+        )
         self.route = nn.Embedding(10, 8)
         self.head = nn.Sequential(
-            nn.Linear(self.encoded_width + 13, self.config.head_width),
+            nn.Linear(672 + 8 + 4 + 1, 250),  # history, route, calendar, lead
             nn.GELU(),
-            nn.Dropout(self.config.dropout),
-            nn.Linear(self.config.head_width, 24),
+            nn.Dropout(0.1),
+            nn.Linear(250, 24),
         )
         nn.init.constant_(self.head[-1].bias, math.log(math.expm1(1)))
 
     def encode_history(self, history):
-        """Encode bounded boarding counts and aligned calendar features."""
         counts, calendar = history["counts"], history["calendar"]
         b = counts.shape[0]
-        if counts.shape != (b, 1, self.history_hours) or calendar.shape != (b, 6, self.history_hours):
-            raise ValueError(f"history must cover exactly {self.history_hours} aligned hours")
-        y = self.boarding(torch.cat((counts / self.scale, calendar), dim=1))
-        return self.shared(y).flatten(1)
+        if counts.shape != (b, 1, 504) or calendar.shape != (b, 6, 504):
+            raise ValueError("history must cover exactly 504 aligned hours")
+        return self.encoder(torch.cat((counts / self.scale, calendar), dim=1))
 
     def predict_day(self, encoded_history, route_indices, request_calendar, lead):
         b = encoded_history.shape[0]

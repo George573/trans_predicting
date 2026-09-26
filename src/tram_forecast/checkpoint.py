@@ -10,7 +10,6 @@ import torch
 
 from .io import digest
 from .model import ForecastNetwork
-from .settings import Settings
 
 
 def seed_all(seed):
@@ -47,8 +46,7 @@ def save_checkpoint(path, model, store, settings, optimizer=None, **progress):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "version": 2,
-        "training_layout": "grouped_contexts_v1",
+        "version": 3,
         "model": model.state_dict(),
         "model_kind": model.model_kind,
         "settings": settings.to_dict(),
@@ -75,22 +73,10 @@ def save_checkpoint(path, model, store, settings, optimizer=None, **progress):
 
 def read_checkpoint(path):
     payload = torch.load(path, map_location="cpu", weights_only=True)
-    if payload.get("version") not in (1, 2):
-        raise ValueError("unsupported checkpoint version")
+    if payload.get("version") != 3:
+        raise ValueError("this fixed CNN requires a new checkpoint; retrain the model")
     if digest(payload["artifact_contract"]) != payload["artifact_hash"]:
         raise ValueError("checkpoint artifact contract is corrupt")
-    if payload.get("model_kind") != "boarding_only":
-        raise ValueError("event-stream checkpoints are no longer supported; use a boarding_only checkpoint")
-    if payload["version"] == 1:
-        # Keep existing boarding-only weights usable for head export and fresh refits.
-        for key in ("embedding_dims", "category_caps", "min_frequency", "event1", "event2",
-                    "event_depth", "event_pool", "max_hours", "max_positions", "checkpoint_events"):
-            payload["settings"]["model"].pop(key, None)
-        for key in ("raw_paths", "temp_dir", "memory_limit", "threads", "fetch_rows"):
-            payload["settings"]["data"].pop(key, None)
-        payload.pop("vocab_sizes", None)
-    # Old checkpoints were trained on leads 1..61, never reinterpret them as seven-day runs.
-    payload["settings"]["training"].setdefault("forecast_days", 61)
     return payload
 
 
@@ -98,10 +84,7 @@ def load_model(path, store, device="cpu"):
     payload = read_checkpoint(path)
     if payload["artifact_hash"] != store.contract_hash:
         raise ValueError("checkpoint/artifact contract mismatch")
-    settings = Settings.from_dict(payload["settings"])
-    model = ForecastNetwork(
-        payload["scale"], settings.model, payload["model_kind"]
-    ).to(device)
+    model = ForecastNetwork(payload["scale"]).to(device)
     model.load_state_dict(payload["model"])
     model.eval()
     return model, payload

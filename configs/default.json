@@ -1,98 +1,9 @@
 {
-  "model": {
-    "hourly": [
-      [
-        12,
-        3,
-        1
-      ],
-      [
-        12,
-        5,
-        24
-      ],
-      [
-        8,
-        3,
-        168
-      ]
-    ],
-    "shared1": [
-      [
-        24,
-        3,
-        1
-      ],
-      [
-        24,
-        5,
-        2
-      ],
-      [
-        16,
-        3,
-        12
-      ]
-    ],
-    "shared2": [
-      [
-        12,
-        3,
-        1
-      ],
-      [
-        12,
-        5,
-        2
-      ],
-      [
-        8,
-        3,
-        12
-      ]
-    ],
-    "shared3": [
-      [
-        6,
-        3,
-        1
-      ],
-      [
-        6,
-        5,
-        2
-      ],
-      [
-        4,
-        3,
-        6
-      ]
-    ],
-    "dropout": 0.1,
-    "seed": 67
-  },
   "data": {
     "label_paths": [
       "dataset/labels/labels_day_train.csv",
       "dataset/labels/labels_day_test.csv"
-    ],
-    "routes": [
-      1,
-      7,
-      11,
-      12,
-      17,
-      25,
-      26,
-      28,
-      50
-    ],
-    "start": "2025-01-01",
-    "validation_cutoff": "2025-09-01",
-    "final_cutoff": "2025-11-01",
-    "forecast_end": "2026-01-01",
-    "output_root": "outputs/prepared",
-    "min_free_disk_bytes": 1000000000
+    ]
   },
   "training": {
     "forecast_days": 7,
@@ -105,6 +16,6 @@
     "clip_norm": 1.0,
     "device": "cpu",
     "output_root": "outputs/runs",
-    "num_workers": 0
+    "seed": 67
   }
 }

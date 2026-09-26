@@ -1,8 +1,10 @@
 import pytest
+import torch
 
-from tram_forecast.config import Config
-from tram_forecast.preprocess import prepare
-from tram_forecast.settings import DataSettings, Settings
+torch.set_num_threads(1)
+
+from tram_forecast.config import DataSettings, Settings
+from tram_forecast.data import prepare
 
 
 @pytest.fixture
@@ -21,6 +23,6 @@ def prepared(tmp_path):
         output_root=str(tmp_path / "prepared"),
         min_free_disk_bytes=0,
     )
-    settings = Settings(model=Config(), data=data)
+    settings = Settings(data=data)
     path = prepare(settings, "validation")
     return settings, path

@@ -9,19 +9,12 @@ from .checkpoint import read_checkpoint
 from .config import ROUTES
 from .io import write_json
 from .model import ForecastNetwork
-from .schema import calendar, label_grid, request_calendar
-from .settings import Settings
+from .data import calendar, label_grid, request_calendar
 
 
 def export_head(checkpoint, labels, output):
     payload = read_checkpoint(checkpoint)
-    if payload["model_kind"] != "boarding_only":
-        raise ValueError("the stand serves boarding-only checkpoints")
-    model = ForecastNetwork(
-        payload["scale"],
-        Settings.from_dict(payload["settings"]).model,
-        payload["model_kind"],
-    )
+    model = ForecastNetwork(payload["scale"])
     model.load_state_dict(payload["model"])
     model.eval()
     cutoff = date.fromisoformat(payload["artifact_contract"]["end"])

@@ -9,27 +9,22 @@ import numpy as np
 import torch
 
 from .checkpoint import seed_all
-from .dataset import collate_samples, history_sample
+from .config import HISTORY_DAYS
+from .data import SampleIdentity, Store, collate_samples, history_sample, request_calendar
 from .model import ForecastNetwork
-from .schema import SampleIdentity, request_calendar
-from .storage import Store
 
 
-def smoke(settings, artifact, model_kind="boarding_only"):
-    seed_all(settings.model.seed)
+def smoke(settings, artifact):
+    seed_all(settings.training.seed)
     store = Store(artifact)
-    model = ForecastNetwork(
-        store.metadata["scale"],
-        settings.model,
-        model_kind,
-    ).to(settings.training.device)
+    model = ForecastNetwork(store.metadata["scale"]).to(settings.training.device)
     counts = store.counts
     candidates = []
     for r, route in enumerate(store.routes):
         prefix = np.concatenate(([0], np.cumsum(counts[r], dtype=np.float64)))
-        for day in range(settings.model.history_days, (store.end - store.start).days + 1):
+        for day in range(HISTORY_DAYS, (store.end - store.start).days + 1):
             stop = day * 24
-            candidates.append((int(prefix[stop] - prefix[stop - settings.model.history_days * 24]), route, day))
+            candidates.append((int(prefix[stop] - prefix[stop - HISTORY_DAYS * 24]), route, day))
     candidates.sort()
     if not candidates:
         raise ValueError("no complete histories for smoke check")
@@ -40,7 +35,7 @@ def smoke(settings, artifact, model_kind="boarding_only"):
         cutoff = store.start + timedelta(days=day)
         sample = history_sample(
             store, SampleIdentity(route, cutoff, cutoff),
-            settings.model.history_days
+            HISTORY_DAYS
         )
         days = settings.training.forecast_days
         sample["lead"] = np.arange(1, days + 1, dtype=np.float32)

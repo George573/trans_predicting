@@ -1,67 +1,110 @@
-"""Validated, serializable model configuration; path tuples are (width, kernel, dilation)."""
+"""Data paths, fitting periods and training options."""
 
-import hashlib
 import json
-from dataclasses import asdict, dataclass
+import math
+from dataclasses import asdict, dataclass, field
+from datetime import date
 from pathlib import Path
 
+
 ROUTES = (1, 7, 11, 12, 17, 25, 26, 28, 50)
+HISTORY_DAYS = 21
 
 
 @dataclass(frozen=True)
-class Config:
-    hourly: tuple = ((12, 3, 1), (12, 5, 24), (8, 3, 168))
-    shared1: tuple = ((24, 3, 1), (24, 5, 2), (16, 3, 12))
-    shared2: tuple = ((12, 3, 1), (12, 5, 2), (8, 3, 12))
-    shared3: tuple = ((6, 3, 1), (6, 5, 2), (4, 3, 6))
-    hourly_stride: int = 1
-    history_days: int = 21
-    shared_depth: int = 3
-    temporal_pool: str = "max"
-    pooled_hours: int | None = None
-    head_width: int = 250
-    dropout: float = 0.1
+class DataSettings:
+    label_paths: tuple = (
+        "dataset/labels/labels_day_train.csv",
+        "dataset/labels/labels_day_test.csv",
+    )
+    routes: tuple = ROUTES
+    start: str = "2025-01-01"
+    validation_cutoff: str = "2025-09-01"
+    final_cutoff: str = "2025-11-01"
+    forecast_end: str = "2026-01-01"
+    output_root: str = "outputs/prepared"
+    min_free_disk_bytes: int = 1_000_000_000
+
+    def __post_init__(self):
+        for name in ("label_paths", "routes"):
+            object.__setattr__(self, name, tuple(getattr(self, name)))
+        if (
+            not self.label_paths
+            or not self.routes
+            or len(set(self.routes)) != len(self.routes)
+            or any(r not in ROUTES for r in self.routes)
+        ):
+            raise ValueError(
+                "nonempty paths and unique supported neural routes required"
+            )
+        dates = [
+            date.fromisoformat(getattr(self, n))
+            for n in ("start", "validation_cutoff", "final_cutoff", "forecast_end")
+        ]
+        if (
+            not all(a < b for a, b in zip(dates, dates[1:]))
+            or (dates[1] - dates[0]).days < 22
+            or (dates[2] - dates[1]).days > 61
+            or (dates[3] - dates[2]).days > 61
+        ):
+            raise ValueError(
+                "ordered fitting/evaluation dates with at least 22 training days required"
+            )
+        if self.min_free_disk_bytes < 0:
+            raise ValueError("invalid preparation resource limits")
+
+
+@dataclass(frozen=True)
+class TrainSettings:
+    forecast_days: int = 7
+    batch_size: int = 1
+    accumulation: int = 8
+    epochs: int = 30
+    patience: int = 5
+    learning_rate: float = 0.001
+    weight_decay: float = 0.0001
+    clip_norm: float = 1.0
+    device: str = "cpu"
+    output_root: str = "outputs/runs"
     seed: int = 67
 
     def __post_init__(self):
-        for name in ("hourly", "shared1", "shared2", "shared3"):
-            paths = tuple(tuple(p) for p in getattr(self, name))
-            if len(paths) < 2 or any(
-                len(p) != 3
-                or any(type(v) is not int or v < 1 for v in p)
-                or p[1] % 2 != 1
-                for p in paths
-            ):
-                raise ValueError(
-                    f"{name}: paths require positive widths/dilations and odd kernels"
-                )
-            object.__setattr__(self, name, paths)
-        for name in ("history_days", "head_width", "hourly_stride"):
-            if type(getattr(self, name)) is not int or getattr(self, name) < 1:
-                raise ValueError(f"{name} must be a positive integer")
-        if type(self.shared_depth) is not int or self.shared_depth not in (1, 2, 3):
-            raise ValueError("shared_depth must be 1, 2 or 3")
-        if self.temporal_pool not in ("max", "avg"):
-            raise ValueError("pooling must be max or avg")
-        length = (self.history_days * 24 + self.hourly_stride - 1) // self.hourly_stride
-        for factor in (2, 2, 3)[:self.shared_depth]:
-            length //= factor
-        if length < 1 or (self.pooled_hours is not None and (
-            type(self.pooled_hours) is not int or not 1 <= self.pooled_hours <= length
-        )):
-            raise ValueError("pooled_hours must fit the downsampled history")
-        if not 0 <= self.dropout < 1:
-            raise ValueError("invalid dropout")
+        if type(self.forecast_days) is not int or not 1 <= self.forecast_days <= 61:
+            raise ValueError("forecast_days must be an integer in 1..61")
+        if any(
+            type(v) is not int or v < 1
+            for v in (self.batch_size, self.accumulation, self.epochs, self.patience)
+        ):
+            raise ValueError("training counts must be positive integers")
+        if (
+            any(
+                not math.isfinite(v) or v <= 0
+                for v in (self.learning_rate, self.clip_norm)
+            )
+            or not math.isfinite(self.weight_decay)
+            or self.weight_decay < 0
+        ):
+            raise ValueError("invalid optimizer settings")
+
+
+@dataclass(frozen=True)
+class Settings:
+    data: DataSettings = field(default_factory=DataSettings)
+    training: TrainSettings = field(default_factory=TrainSettings)
 
     def to_dict(self):
         return asdict(self)
 
-    @property
-    def fingerprint(self):
-        return hashlib.sha256(
-            json.dumps(self.to_dict(), sort_keys=True).encode()
-        ).hexdigest()
+    @classmethod
+    def from_dict(cls, value):
+        unknown = set(value) - {"data", "training"}
+        if unknown:
+            raise ValueError(f"unknown settings: {sorted(unknown)}")
+        return cls(
+            DataSettings(**value.get("data", {})),
+            TrainSettings(**value.get("training", {})),
+        )
 
     @classmethod
     def load(cls, path):
-        return cls(**json.loads(Path(path).read_text()))
+        return cls.from_dict(json.loads(Path(path).read_text()))

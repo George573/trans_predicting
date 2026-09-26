@@ -7,7 +7,7 @@ Go-сервис с интерактивным UI и CNN из `tram_forecast` (bo
 
 ## Запуск
 
-Из корня репозитория. Нужны чекпойнт `outputs/boarding_only_61days_v5_final/final.pt` и
+Из корня репозитория. Нужны чекпойнт `outputs/runs/final/boarding_only/final.pt` и
 `dataset/labels/labels_day_test.csv`, оба в git не лежат.
 
 ```bash
@@ -21,9 +21,9 @@ STAND_AUTH=jury:secret docker compose up -d    # то же под basic auth
 
 ```bash
 pip install -e .
-python -m tram_forecast export-head --checkpoint outputs/boarding_only_61days_v5_final/final.pt \
+python -m tram_forecast export-head --checkpoint outputs/runs/final/boarding_only/final.pt \
     --labels dataset/labels/labels_day_test.csv --output head.json
-cd bench/go-inference-stand && go run ./cmd/server -model ../../head.json
+cd service && go run ./cmd/server -model ../head.json
 ```
 
 ## Как считается прогноз
@@ -41,7 +41,7 @@ cd bench/go-inference-stand && go run ./cmd/server -model ../../head.json
   раз на блок. erf в GELU - рациональная аппроксимация float32 (ошибка 3e-7), softplus -
   `max(x, 0) + log1p(e^-|x|)`, где log1p - многочлен Чебышёва 9-й степени (ошибка 3e-9):
   `math.Log1p` в Go медленный и занимал пятую часть времени.
-- История строится тем же `schema.label_grid`, что и при подготовке данных для обучения.
+- История строится тем же `data.label_grid`, что и при подготовке данных для обучения.
   Сверка: `scale` чекпойнта в точности равен среднему по labels январь-октябрь.
 - В `head.json` лежат 27 дней, посчитанных torch целиком. Сервер при старте считает весь
   горизонт и сверяет с ними (допуск 1e-4). При расхождении он не запускается.

@@ -2,10 +2,13 @@
 
 import math
 import time
+import sys
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 
 import torch
+from tqdm.auto import tqdm
 
 from .checkpoint import (
     load_model,
@@ -14,20 +17,69 @@ from .checkpoint import (
     save_checkpoint,
     seed_all,
 )
-from .dataset import ForecastDataset, collate_samples, epoch_order
+from .data import ForecastDataset, collate_samples, epoch_order
 from .evaluate import evaluate_model
 from .io import write_json
-from .losses import mae, normalize_gradients
 from .model import ForecastNetwork
-from .progress import TrainingProgress
-from .settings import Settings
+from .config import Settings
 
 
-def train(settings, artifact, model_kind="boarding_only", output=None, resume=None, final=False):
-    seed_all(settings.model.seed)
+def mae(prediction, target):
+    if (
+        prediction.shape != target.shape
+        or prediction.ndim != 2
+        or prediction.shape[1] != 24
+    ):
+        raise ValueError("loss expects matching [requests,24] predictions/targets")
+    if not torch.isfinite(prediction).all() or not torch.isfinite(target).all():
+        raise ValueError("nonfinite regression values")
+    return (prediction - target).abs().mean()
+
+
+def normalize_gradients(parameters, sample_count):
+    if sample_count < 1:
+        raise ValueError("empty accumulation group")
+    for parameter in parameters:
+        if parameter.grad is not None:
+            parameter.grad.div_(sample_count)
+
+
+class TrainingProgress:
+    def __init__(self, stream=None):
+        self.stream = stream if stream is not None else sys.stderr
+        self.bar = None
+
+    @contextmanager
+    def epoch(self, epoch, epochs, total):
+        with tqdm(
+            total=total,
+            desc=f"Epoch {epoch}/{epochs}",
+            unit="batch",
+            file=self.stream,
+            dynamic_ncols=True,
+            mininterval=0.5,
+        ) as bar:
+            self.bar = bar
+            try:
+                yield
+            finally:
+                self.bar = None
+
+    def show(self, message, force=False):
+        self.message(message)
+
+    def message(self, message):
+        tqdm.write(message, file=self.stream)
+
+    def batch(self, completed, mae, steps):
+        self.bar.set_postfix(MAE=f"{mae:.5g}", step=steps, refresh=False)
+        self.bar.update(completed - self.bar.n)
+
+
+def train(settings, artifact, output=None, resume=None, final=False):
+    seed_all(settings.training.seed)
     dataset = ForecastDataset(
-        artifact, model_kind, settings.training.forecast_days,
-        settings.model.history_days, settings.training.context_start_days,
+        artifact, settings.training.forecast_days,
     )
     store = dataset.store
     if store.metadata["regime"] != ("final" if final else "validation"):
@@ -54,7 +106,7 @@ def train(settings, artifact, model_kind="boarding_only", output=None, resume=No
         or (Path(resume).resolve().parent if resume else None)
         or Path(settings.training.output_root)
         / ("final" if final else "validation")
-        / model_kind
+        / "boarding_only"
     )
     output.mkdir(parents=True, exist_ok=True)
     if resume and output.resolve() != Path(resume).resolve().parent:
@@ -63,11 +115,7 @@ def train(settings, artifact, model_kind="boarding_only", output=None, resume=No
         (output / "latest.pt").exists() or (output / "best.pt").exists()
     ):
         raise ValueError("run already exists; use --resume or a new output directory")
-    model = ForecastNetwork(
-        store.metadata["scale"],
-        settings.model,
-        model_kind,
-    ).to(settings.training.device)
+    model = ForecastNetwork(store.metadata["scale"]).to(settings.training.device)
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=settings.training.learning_rate,
@@ -82,19 +130,13 @@ def train(settings, artifact, model_kind="boarding_only", output=None, resume=No
     stale = 0
     if resume:
         loaded, payload = load_model(resume, store, settings.training.device)
-        if payload.get("training_layout") != "grouped_contexts_v1":
-            raise ValueError("legacy training layout cannot resume; start a fresh run")
         old = Settings.from_dict(payload["settings"])
         old_training = old.to_dict()["training"]
         new_training = settings.to_dict()["training"]
         for key in ("epochs", "output_root"):
             old_training.pop(key)
             new_training.pop(key)
-        if (
-            old.model != settings.model
-            or old_training != new_training
-            or payload["model_kind"] != model_kind
-        ):
+        if old_training != new_training:
             raise ValueError("resume configuration mismatch")
         model.load_state_dict(loaded.state_dict())
         if payload["optimizer"] is None:
@@ -122,7 +164,7 @@ def train(settings, artifact, model_kind="boarding_only", output=None, resume=No
         history = [entry for entry in history if entry["epoch"] <= epoch_start]
     feedback = TrainingProgress()
     feedback.message(
-        f"{'Resuming' if resume else 'Training'} {model_kind} on {settings.training.device} | "
+        f"{'Resuming' if resume else 'Training'} boarding_only on {settings.training.device} | "
         f"{len(dataset)} contexts | batch size {settings.training.batch_size} | "
         f"accumulation {settings.training.accumulation} | output: {output}"
     )
@@ -134,7 +176,7 @@ def train(settings, artifact, model_kind="boarding_only", output=None, resume=No
         started = time.monotonic()
         model.train()
         optimizer.zero_grad(set_to_none=True)
-        order = epoch_order(len(dataset), epoch, settings.model.seed)
+        order = epoch_order(len(dataset), epoch, settings.training.seed)
         accumulated = 0
         microbatches = 0
         loss_sum = 0.0
@@ -257,7 +299,7 @@ def refit(selected_checkpoint, artifact, output=None, device=None, resume=None, 
         settings.training, epochs=epochs, device=device or settings.training.device
     )
     settings = replace(settings, training=training)
-    from .storage import Store
+    from .data import Store
 
     store = Store(artifact)
     if (
@@ -267,5 +309,5 @@ def refit(selected_checkpoint, artifact, output=None, device=None, resume=None, 
     ):
         raise ValueError("final refit artifact period/routes mismatch")
     return train(
-        settings, artifact, payload["model_kind"], output, resume=resume, final=True
+        settings, artifact, output, resume=resume, final=True
     )

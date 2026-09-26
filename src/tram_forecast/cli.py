@@ -6,7 +6,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from .io import digest, write_json
-from .settings import Settings
+from .config import Settings
 
 
 def build_parser():
@@ -30,8 +30,6 @@ def build_parser():
             p.add_argument("--artifact", required=name != "prepare")
         if name == "prepare":
             p.add_argument("--regime", choices=["validation", "final"], required=True)
-        if name in ("train", "smoke"):
-            p.add_argument("--model", choices=["boarding_only"], default="boarding_only")
         if name in ("train", "refit"):
             p.add_argument("--resume")
         if name in ("evaluate", "predict", "export-head"):
@@ -80,29 +78,29 @@ def main(argv=None):
                 "resolved": settings.to_dict(),
             }
         elif args.command == "prepare":
-            from .preprocess import prepare
+            from .data import prepare
 
             result = {"artifact": str(prepare(settings, args.regime, args.artifact))}
         elif args.command == "inspect":
-            from .storage import Store
+            from .data import Store
 
             result = Store(args.artifact).metadata
         elif args.command == "smoke":
             from .smoke import smoke
 
-            result = smoke(settings, args.artifact, args.model)
+            result = smoke(settings, args.artifact)
         elif args.command == "train":
             from .train import train
 
             result = {
                 "checkpoint": str(
-                    train(settings, args.artifact, args.model, args.output, args.resume)
+                    train(settings, args.artifact, args.output, args.resume)
                 )
             }
         elif args.command == "evaluate":
             from .checkpoint import load_model, read_checkpoint
             from .evaluate import evaluate_model
-            from .storage import Store
+            from .data import Store
 
             payload = read_checkpoint(args.checkpoint)
             store = Store(args.artifact)

@@ -5,9 +5,14 @@ from datetime import date, timedelta
 import numpy as np
 import torch
 
-from .config import ROUTES
-from .dataset import collate_samples, history_sample, validate_horizon
-from .schema import SampleIdentity, request_calendar
+from .config import HISTORY_DAYS, ROUTES
+from .data import (
+    SampleIdentity,
+    collate_samples,
+    history_sample,
+    request_calendar,
+    validate_horizon,
+)
 
 
 def metrics(actual, predicted):
@@ -91,7 +96,7 @@ def fixed_forecast(model, store, days=7):
         sample = history_sample(
             store,
             SampleIdentity(route, store.end, store.end),
-            model.config.history_days,
+            HISTORY_DAYS,
         )
         history, _, _ = collate_samples([sample], device)
         encoded = model.encode_history(history)
@@ -133,27 +138,4 @@ def evaluate_model(model, store, days=7):
         "forecast_days": days,
         "artifact": store.contract_hash,
         "model_kind": model.model_kind,
-    }
-
-
-def evaluate_weekly_profiles(store, days=7, histories=(7, 21)):
-    """Evaluate simple weekly forecasts on the same neural-route validation grid."""
-    validate_horizon(days)
-    if store.metadata["regime"] != "validation":
-        raise ValueError("evaluation requires a validation artifact")
-    available = (date.fromisoformat(store.metadata["evaluation_end"]) - store.end).days
-    if days > available:
-        raise ValueError("forecast horizon exceeds available validation days")
-    actual = np.asarray(store.evaluation_targets()).reshape(
-        len(store.routes) + 1, available, 24
-    )[:-1, :days]
-    return {
-        "artifact": store.contract_hash,
-        "cutoff": str(store.end),
-        "forecast_days": days,
-        "routes": list(store.routes),
-        "baselines": [
-            {"history_days": history, **metrics(actual, weekly_profile(store, days, history))}
-            for history in histories
-        ],
     }

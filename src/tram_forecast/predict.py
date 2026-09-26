@@ -12,7 +12,7 @@ from .checkpoint import load_model
 from .config import ROUTES
 from .evaluate import fixed_forecast
 from .io import write_json
-from .storage import Store
+from .data import Store
 
 
 def submission_keys(start=date(2025, 11, 1), end=date(2026, 1, 1)):
