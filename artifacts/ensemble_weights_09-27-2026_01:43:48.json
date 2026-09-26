@@ -1,0 +1,14 @@
+{
+  "weights": {
+    "catboost_cyclic": 0.9,
+    "catboost_base": 0.0,
+    "harmonic": 0.0,
+    "mlp": 0.1
+  },
+  "oof_wape": 0.10575701502445639,
+  "calib_keys": [
+    "route",
+    "weekday"
+  ],
+  "shrink": 5.0
+}
