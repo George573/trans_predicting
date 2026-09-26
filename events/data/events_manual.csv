@@ -1,0 +1,33 @@
+event_id,name,category,start_msk,end_msk,venue,routes,source
+e001,"Рождественские богослужения, продлённая работа транспорта",religious,2025-01-06 23:00,2025-01-07 03:30,citywide,,https://t.me/DtOperativno/19906
+e002,"Крещенская ночь, 35 маршрутов до 3:00",religious,2025-01-18 22:00,2025-01-19 03:00,citywide,,https://t.me/DtOperativno/19996
+e003,"Вербное воскресенье, усиление маршрутов к кладбищам",religious,2025-04-13 08:00,2025-04-13 18:00,citywide,,https://t.me/DtOperativno/20696
+e004,"Пасхальная ночь, около 150 маршрутов до 3:30",religious,2025-04-19 22:00,2025-04-20 03:30,citywide,,https://t.me/DtOperativno/20812
+e005,"Красная горка, усиление маршрутов к кладбищам",religious,2025-04-27 08:00,2025-04-27 18:00,citywide,,https://t.me/DtOperativno/20696
+e006,"Парад Победы и салют",city_holiday,2025-05-09 07:00,2025-05-09 23:00,citywide,,https://t.me/DtOperativno/21117
+e007,"Ночь в музее, ВДНХ",city_festival,2025-05-17 18:00,2025-05-17 23:00,vdnh,,https://t.me/DtOperativno/21166
+e008,"Финал Кубка России ЦСКА - Ростов, 57 тыс. зрителей",football,2025-06-01 18:00,2025-06-01 20:15,luzhniki,,https://www.sport-express.ru/football/rus_cup/news/rostov-cska-vo-skolko-nachalo-finala-kubka-rossii-vremya-segodnya-1-iyunya-2025-2331153/
+e009,"Товарищеский матч Россия - Нигерия",football,2025-06-06 20:00,2025-06-06 22:00,luzhniki,,https://www.1tv.ru/news/2025-04-25/508063-sbornaya_rossii_po_futbolu_sygraet_s_nigeriey_v_luzhnikah_6_iyunya
+e010,"Ночной забег ЗОбег, ВДНХ",sport_run,2025-06-14 22:00,2025-06-15 00:30,vdnh,,https://t.me/DtOperativno/21518
+e011,"Баста, БСА Лужники (1-й день)",concert,2025-06-27 20:00,2025-06-27 23:00,luzhniki,,https://www.luzhniki.ru/afisha/muzyka/basta-v-luzhnikah-27-i-28-iyunya-2025-goda/
+e012,"Московский выпускной, ВДНХ",city_festival,2025-06-27 18:00,2025-06-28 05:00,vdnh,,https://t.me/DtOperativno/21661
+e013,"Баста, БСА Лужники (2-й день)",concert,2025-06-28 20:00,2025-06-28 23:00,luzhniki,,https://www.luzhniki.ru/afisha/muzyka/basta-v-luzhnikah-27-i-28-iyunya-2025-goda/
+e014,"Семейный праздник Гербер, ВДНХ",city_festival,2025-07-05 10:00,2025-07-05 18:00,vdnh,,https://t.me/DtOperativno/21739
+e015,"Московский ночной велофестиваль, парк Сокольники",sport_run,2025-07-05 21:00,2025-07-06 00:30,sokolniki,,https://t.me/DtOperativno/21773
+e016,"Всероссийский свадебный фестиваль, ВДНХ",city_festival,2025-07-08 11:30,2025-07-08 14:30,vdnh,,https://t.me/DtOperativno/21809
+e017,"Всероссийский свадебный фестиваль, ВДНХ",city_festival,2025-07-09 11:30,2025-07-09 14:30,vdnh,,https://t.me/DtOperativno/21809
+e018,"Леонид Агутин, БСА Лужники",concert,2025-07-26 20:00,2025-07-26 23:00,luzhniki,,https://redkassa.ru/events/bilety_na_concert_leonid_agutin_bsa_luzhniki
+e019,"Звери, 25 лет, БСА Лужники",concert,2025-08-16 19:00,2025-08-16 22:00,luzhniki,,https://www.luzhniki.ru/afisha/muzyka/zveri-otmetyat-25-letie-koncertom-v-luzhnikah/
+e020,"Забег В ритме района, ВДНХ",sport_run,2025-08-30 21:30,2025-08-30 23:59,vdnh,,https://t.me/DtOperativno/22543
+e021,"Егор Крид, БСА Лужники",concert,2025-08-30 20:00,2025-08-30 23:00,luzhniki,,https://www.luzhniki.ru/afisha/muzyka/egor-krid-v-luzhnikah/
+e022,"Московский осенний велофестиваль, ВДНХ",sport_run,2025-09-13 11:30,2025-09-13 20:00,vdnh,,https://t.me/DtOperativno/22704
+e023,"День города, 878 лет Москве",city_holiday,2025-09-13 10:00,2025-09-14 02:00,citywide,,https://t.me/DtOperativno/22702
+e024,"День города, 878 лет Москве",city_holiday,2025-09-14 10:00,2025-09-14 22:00,citywide,,https://www.kp.ru/afisha/msk/prazdniki/glavnye-sobytiya-stoliczy-2025/
+e025,"Инклюзивный фестиваль Включайся, ВДНХ",city_festival,2025-09-20 08:00,2025-09-20 13:30,vdnh,,https://t.me/DtOperativno/22762
+e026,"Московский марафон 42 км, центр",sport_run,2025-09-21 03:00,2025-09-21 17:30,center,,https://t.me/DtOperativno/22811
+e027,"Всероссийский патриотический форум, ВДНХ",forum,2025-12-07 09:00,2025-12-10 08:00,vdnh,,https://t.me/DtOperativno/23899
+e028,"Новогодняя ночь, 18 трамвайных маршрутов круглосуточно",city_holiday,2025-12-31 18:00,2026-01-01 06:00,citywide,,https://t.me/DtOperativno/24391
+e029,"Рождество, 18 трамвайных маршрутов до 3:30",religious,2026-01-06 23:00,2026-01-07 03:30,citywide,,https://t.me/DtOperativno/24391
+e030,"День города, 879 лет Москве",city_holiday,2026-09-05 10:00,2026-09-06 22:00,citywide,,https://kudago.com/msk/event/prazdnik-den-goroda-v-moskve/
+e031,"Ночь искусств, ВДНХ",city_festival,2025-11-03 18:00,2025-11-03 22:00,vdnh,,https://vdnh.ru/news/4507/
+e032,"Выставка парковочных технологий, ВДНХ",forum,2025-11-11 10:00,2025-11-13 18:00,vdnh,,https://vdnh.ru/news/4529/
