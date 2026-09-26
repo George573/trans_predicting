@@ -1,0 +1,680 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Пульт прогноза</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Тёмная подложка намеренно: экран диспетчера (QA-сессия), одна тема. */
+:root {
+  color-scheme: dark;
+  --bg: #0c1117;
+  --panel: #131a22;
+  --panel-2: #1a232e;
+  --line: #243140;
+  --ink: #e6edf3;
+  --ink-2: #aab6c4;
+  --ink-3: #7d8a99;
+  --accent: #f0b43c;      /* сигнальный янтарь, только для активного и главного */
+  --accent-ink: #1b1400;
+  --blue: #3f8ee8;
+  --blue-2: #2c6fbe;
+  --good: #3fbf78;
+  --warn: #e8a33c;
+  --bad: #ec6b61;
+  --t-parse: #7d8a99;
+  --t-feat: #9085e9;
+  --t-model: #3f8ee8;
+  --t-roll: #199e70;
+  --t-json: #d55181;
+  --t-net: #3a4757;
+  --font: "Onest", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 var(--font); }
+button, select, input { font: inherit; color: inherit; }
+.mono, .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--ink-2); }
+.dim { color: var(--ink-3); }
+.small { font-size: 12.5px; }
+h1, h2, h3 { margin: 0; line-height: 1.25; text-wrap: balance; }
+h2 { font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.app { display: grid; grid-template-columns: 330px 1fr; min-height: 100%; }
+@media (max-width: 980px) { .app { grid-template-columns: 1fr; } }
+
+/* левая панель управления */
+.rail { background: var(--panel); border-right: 1px solid var(--line); padding: 18px 16px 24px; display: flex; flex-direction: column; gap: 20px; }
+.brand { display: flex; flex-direction: column; gap: 4px; }
+.brand h1 { font-size: 18px; font-weight: 700; }
+.modelbox { font-family: var(--mono); font-size: 12px; color: var(--ink-2); background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.modelbox b { color: var(--ink); font-weight: 600; }
+.group { display: flex; flex-direction: column; gap: 8px; }
+.plates { display: flex; flex-wrap: wrap; gap: 6px; }
+.plate { min-width: 38px; height: 30px; padding: 0 8px; border-radius: 6px; border: 2px solid var(--line); background: var(--panel-2); font-family: var(--mono); font-weight: 600; cursor: pointer; }
+.plate:hover { border-color: var(--ink-3); }
+.plate[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.plate.all { min-width: 56px; font-family: var(--font); font-size: 13px; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.seg button { border: 0; background: var(--panel-2); padding: 7px 6px; font-size: 13px; color: var(--ink-2); cursor: pointer; border-right: 1px solid var(--line); }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: #243244; color: var(--ink); font-weight: 600; }
+.seg button:disabled { color: var(--ink-3); cursor: not-allowed; opacity: .5; }
+input[type="date"], select { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font-family: var(--mono); width: 100%; }
+.slider { display: grid; grid-template-columns: 92px 1fr 44px; gap: 8px; align-items: center; font-size: 13px; }
+.slider input { width: 100%; accent-color: var(--accent); }
+.slider output { font-family: var(--mono); text-align: right; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.btn { border: 1px solid var(--line); background: var(--panel-2); border-radius: 7px; padding: 8px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--ink-3); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.btn.danger { border-color: var(--bad); color: var(--bad); }
+.btn.link { border: 0; background: none; padding: 2px 0; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
+.check { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--ink-2); }
+.scen { display: flex; flex-direction: column; gap: 4px; }
+.scen button { text-align: left; border: 1px solid transparent; background: none; padding: 6px 8px; border-radius: 6px; cursor: pointer; color: var(--ink-2); font-size: 13px; display: flex; justify-content: space-between; gap: 8px; }
+.scen button:hover { background: var(--panel-2); border-color: var(--line); color: var(--ink); }
+.scen .tag { font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); }
+
+/* основная область */
+main { padding: 18px 20px 28px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.card-h { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+
+.reqline { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-family: var(--mono); font-size: 13px; }
+.verb { background: #1f3350; color: #9cc6ff; padding: 2px 7px; border-radius: 4px; font-weight: 600; }
+.url { word-break: break-all; color: var(--ink); flex: 1 1 320px; }
+.url .q { color: var(--accent); }
+.status { padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 12.5px; }
+.status.ok { background: rgba(63,191,120,.15); color: var(--good); }
+.status.err { background: rgba(236,107,97,.15); color: var(--bad); }
+.status.wait { background: rgba(125,138,153,.18); color: var(--ink-2); }
+
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.kpi { background: var(--panel-2); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.kpi .v { font-family: var(--mono); font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.kpi .l { font-size: 12px; color: var(--ink-3); }
+
+.wf { display: flex; height: 18px; border-radius: 4px; overflow: hidden; background: var(--panel-2); }
+.wf span { height: 100%; min-width: 2px; border-right: 2px solid var(--panel); }
+.wf span:last-child { border-right: 0; }
+.wf-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12.5px; color: var(--ink-2); }
+.wf-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+
+.split { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 1280px) { .split { grid-template-columns: 1fr; } }
+
+.chart { position: relative; height: 320px; }
+.chart svg { display: block; }
+.tip { position: absolute; pointer-events: none; background: #0f161e; border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-size: 12.5px; box-shadow: 0 6px 18px rgba(0,0,0,.4); white-space: nowrap; z-index: 3; }
+.hm { overflow-x: auto; }
+.hm table { border-collapse: separate; border-spacing: 2px; font-family: var(--mono); font-size: 11px; }
+.hm td.c { width: 22px; min-width: 22px; height: 26px; border-radius: 3px; cursor: pointer; }
+.hm td.c:hover { outline: 2px solid var(--accent); }
+.hm td.c.sel { outline: 2px solid var(--accent); }
+.hm th { color: var(--ink-3); font-weight: 400; padding: 0 4px; }
+.hm td.r { padding-right: 6px; }
+.hm td.t { padding-left: 8px; color: var(--ink-2); text-align: right; }
+.scale { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-3); }
+.scale .bar { height: 8px; width: 160px; border-radius: 4px; }
+
+/* разбор точки */
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.steps li { display: grid; grid-template-columns: 24px 1fr; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.steps li:last-child { border-bottom: 0; }
+.steps .n { width: 22px; height: 22px; border-radius: 50%; background: var(--panel-2); color: var(--ink-2); font: 600 11px var(--mono); display: flex; align-items: center; justify-content: center; }
+.steps h3 { font-size: 13.5px; font-weight: 600; margin-bottom: 4px; }
+.kv { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 10px; font-family: var(--mono); font-size: 12px; }
+.kv .k { color: var(--ink-3); }
+.kv .h { color: var(--ink-3); text-align: right; }
+.big { font-family: var(--mono); font-size: 26px; font-weight: 600; }
+.formula { font-family: var(--mono); font-size: 12.5px; background: var(--panel-2); border-radius: 6px; padding: 8px 10px; white-space: pre-wrap; }
+.empty { color: var(--ink-3); font-size: 13px; padding: 20px 0; }
+
+pre.json { margin: 0; font: 12px/1.5 var(--mono); background: var(--panel-2); border-radius: 8px; padding: 10px 12px; max-height: 280px; overflow: auto; color: var(--ink-2); }
+pre.json .k { color: #9cc6ff; } pre.json .s { color: #b9e2a5; } pre.json .n { color: var(--accent); }
+
+table.log { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+table.log th, table.log td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.log th { color: var(--ink-3); font-weight: 600; font-size: 11.5px; letter-spacing: .04em; text-transform: uppercase; }
+table.log td.r, table.log th.r { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+table.log td.u { font-family: var(--mono); max-width: 360px; overflow: hidden; text-overflow: ellipsis; }
+table.log tr { cursor: pointer; } table.log tr:hover td { background: var(--panel-2); }
+.tw { overflow-x: auto; }
+
+.load-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.spark { height: 90px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; padding: 2px 8px; border-radius: 999px; background: var(--panel-2); color: var(--ink-2); }
+.pill i { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); }
+.pill.on i { background: var(--good); box-shadow: 0 0 0 3px rgba(63,191,120,.2); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="rail" aria-label="Управление">
+    <div class="brand">
+      <h1>Пульт прогноза</h1>
+      <span class="small dim">Каждое действие отправляет настоящий запрос в Go-сервис, CNN считает раннер на ONNX Runtime.</span>
+    </div>
+    <div class="modelbox" id="modelbox">загружаю модель...</div>
+
+    <div class="group">
+      <h2>Маршрут</h2>
+      <div class="plates" id="routes"></div>
+    </div>
+
+    <div class="group">
+      <h2>Период</h2>
+      <div class="seg" id="period">
+        <button type="button" data-days="1" aria-pressed="true">День</button>
+        <button type="button" data-days="7" aria-pressed="false">Неделя</button>
+        <button type="button" data-days="30" aria-pressed="false">Месяц</button>
+        <button type="button" data-days="61" aria-pressed="false">Ноя-дек</button>
+      </div>
+      <label class="small dim" for="from">С даты</label>
+      <input type="date" id="from" min="2025-11-01" max="2025-12-31" value="2025-11-10">
+      <div class="seg" id="gran">
+        <button type="button" data-g="hour" aria-pressed="true">По часам</button>
+        <button type="button" data-g="day" aria-pressed="false">По дням</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Корректирующие коэффициенты</h2>
+      <div class="slider"><label for="k_weather">Погода</label><input type="range" id="k_weather" min="0.5" max="1.5" step="0.05" value="1"><output id="o_weather">1.00</output></div>
+      <div class="slider"><label for="k_event">Событие</label><input type="range" id="k_event" min="0.5" max="1.5" step="0.05" value="1"><output id="o_event">1.00</output></div>
+      <div class="slider"><label for="k_season">Сезон</label><input type="range" id="k_season" min="0.5" max="1.5" step="0.05" value="1"><output id="o_season">1.00</output></div>
+      <div class="row"><button type="button" class="btn link" id="k-reset">Сбросить на 1.00</button></div>
+    </div>
+
+    <div class="group">
+      <div class="row">
+        <button type="button" class="btn primary" id="send">Отправить запрос</button>
+        <label class="check"><input type="checkbox" id="auto" checked> сразу при изменении</label>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Сценарии</h2>
+      <div class="scen" id="scen">
+        <button type="button" data-s="day1">Диспетчер открыл маршрут на день<span class="tag">1 строка</span></button>
+        <button type="button" data-s="dayall">Обзор всех маршрутов за день<span class="tag">9</span></button>
+        <button type="button" data-s="month">Маршрут за месяц по дням<span class="tag">30</span></button>
+        <button type="button" data-s="heavy">Все маршруты, месяц по часам<span class="tag">270</span></button>
+        <button type="button" data-s="err">Неизвестный маршрут 99<span class="tag">400</span></button>
+      </div>
+    </div>
+  </aside>
+
+  <main>
+    <section class="card" aria-labelledby="req-h">
+      <div class="card-h"><h2 id="req-h">Запрос</h2><span class="small dim" id="req-note"></span></div>
+      <div class="reqline"><span class="verb">GET</span><span class="url" id="url"></span><span class="status wait" id="status">...</span>
+        <button type="button" class="btn link small" id="copy">Скопировать</button>
+        <a class="btn link small" id="csv" href="#" target="_blank" rel="noopener">CSV</a></div>
+      <div class="kpis">
+        <div class="kpi"><span class="v" id="k-rows">-</span><span class="l">строк ушло в модель</span></div>
+        <div class="kpi"><span class="v" id="k-model">-</span><span class="l">считала модель</span></div>
+        <div class="kpi"><span class="v" id="k-server">-</span><span class="l">весь запрос на сервере</span></div>
+        <div class="kpi"><span class="v" id="k-client">-</span><span class="l">до браузера и обратно</span></div>
+        <div class="kpi"><span class="v" id="k-bytes">-</span><span class="l">размер ответа</span></div>
+      </div>
+      <div class="wf" id="wf" aria-label="Куда ушло время запроса"></div>
+      <div class="wf-legend" id="wf-legend"></div>
+    </section>
+
+    <div class="split">
+      <section class="card" aria-labelledby="res-h">
+        <div class="card-h"><h2 id="res-h">Прогноз</h2><span class="small dim" id="res-note">нажмите на точку или клетку, чтобы разобрать расчёт</span></div>
+        <div id="viz"></div>
+      </section>
+      <section class="card" aria-labelledby="ex-h">
+        <div class="card-h"><h2 id="ex-h">Как посчитана точка</h2><span class="small dim mono" id="ex-url"></span></div>
+        <div id="explain"><p class="empty">Выберите точку на графике.</p></div>
+      </section>
+    </div>
+
+    <div class="split">
+      <section class="card" aria-labelledby="load-h">
+        <div class="card-h"><h2 id="load-h">Нагрузка из браузера</h2><span class="pill" id="load-pill"><i></i><span>стоит</span></span></div>
+        <div class="row">
+          <label class="small dim" for="conc">Параллельно</label>
+          <select id="conc" style="width:auto"><option>1</option><option>2</option><option>4</option><option selected>6</option><option>12</option></select>
+          <label class="small dim" for="lmix">Запросы</label>
+          <select id="lmix" style="width:auto">
+            <option value="current">текущий запрос, случайные даты</option>
+            <option value="mix" selected>микс диспетчера</option>
+            <option value="heavy">только тяжёлые</option>
+          </select>
+          <button type="button" class="btn primary" id="load-btn">Запустить на 15 с</button>
+        </div>
+        <div class="load-grid">
+          <div class="kpi"><span class="v" id="l-rps">-</span><span class="l">RPS сервера</span></div>
+          <div class="kpi"><span class="v" id="l-rows">-</span><span class="l">строк модели в секунду</span></div>
+          <div class="kpi"><span class="v" id="l-cpu">-</span><span class="l">CPU процесса</span></div>
+          <div class="kpi"><span class="v" id="l-p50">-</span><span class="l">p50 в браузере</span></div>
+          <div class="kpi"><span class="v" id="l-p95">-</span><span class="l">p95 в браузере</span></div>
+          <div class="kpi"><span class="v" id="l-mem">-</span><span class="l">heap Go</span></div>
+        </div>
+        <div class="spark" id="spark"></div>
+        <p class="small dim">RPS, CPU и память берутся из <span class="mono">/api/v1/stats</span> раз в секунду. Браузер держит не больше 6 соединений на сайт, так что это оценка снизу. Честный замер делает <span class="mono">cmd/load</span>.</p>
+      </section>
+      <section class="card" aria-labelledby="json-h">
+        <div class="card-h"><h2 id="json-h">Ответ сервиса</h2><span class="small dim" id="json-note"></span></div>
+        <pre class="json" id="json"></pre>
+      </section>
+    </div>
+
+    <section class="card" aria-labelledby="log-h">
+      <div class="card-h"><h2 id="log-h">Журнал запросов</h2><span class="small dim">нажмите на строку, чтобы повторить запрос</span></div>
+      <div class="tw"><table class="log"><thead><tr><th>Время</th><th>Запрос</th><th>Статус</th><th class="r">Строк</th><th class="r">Модель, мс</th><th class="r">Сервер, мс</th><th class="r">Всего, мс</th></tr></thead><tbody id="log"></tbody></table></div>
+    </section>
+  </main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var ROUTES = [1, 5, 7, 11, 12, 17, 25, 26, 28, 50];
+  var WD = ["", "пн", "вт", "ср", "чт", "пт", "сб", "вс"];
+  var MON = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
+  var $ = function (id) { return document.getElementById(id); };
+  var nf = function (v, d) { return Number(v).toLocaleString("ru-RU", { maximumFractionDigits: d == null ? 0 : d, minimumFractionDigits: d == null ? 0 : d }); };
+  var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
+  var isoAdd = function (iso, n) { var t = new Date(iso + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
+  var dlab = function (iso) { var p = iso.split("-"); return +p[2] + " " + MON[+p[1] - 1]; };
+  var wdOf = function (iso) { var d = new Date(iso + "T00:00:00Z").getUTCDay(); return WD[d === 0 ? 7 : d]; };
+  var hh = function (h) { return (h < 10 ? "0" : "") + h + ":00"; };
+
+  var S = { routes: [7], days: 1, from: "2025-11-10", gran: "hour", k: { weather: 1, event: 1, season: 1 }, sel: null, last: null, bad: null };
+
+  /* ---------- модель ---------- */
+  fetch("/api/v1/model").then(function (r) { return r.json(); }).then(function (m) {
+    $("modelbox").innerHTML = "<span><b>" + esc(m.model) + "</b>, " + nf(m.runner.parameters) + " параметров</span><span>история " + m.runner.history.from + " .. " + m.runner.history.to +
+      "</span><span>горизонт " + m.from + " .. " + m.to + "</span><span>" + esc(m.runner.engine) + "</span><span>GOMAXPROCS=" + m.gomaxprocs + ", " + esc(m.go) + "</span>";
+  }).catch(function () { $("modelbox").textContent = "сервис не отвечает"; });
+
+  /* ---------- управление ---------- */
+  function renderRoutes() {
+    var el = $("routes"); el.innerHTML = "";
+    var all = document.createElement("button");
+    all.type = "button"; all.className = "plate all"; all.textContent = "Все";
+    all.setAttribute("aria-pressed", S.routes.length === ROUTES.length ? "true" : "false");
+    all.onclick = function () { S.routes = S.routes.length === ROUTES.length ? [7] : ROUTES.slice(); changed(); };
+    el.appendChild(all);
+    ROUTES.forEach(function (r) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "plate"; b.textContent = r; b.title = "Маршрут " + r + (r === 5 ? " (в истории нет валидаций)" : "");
+      b.setAttribute("aria-pressed", S.routes.indexOf(r) >= 0 && S.routes.length !== ROUTES.length ? "true" : "false");
+      b.onclick = function (ev) {
+        if (ev.shiftKey || ev.metaKey || ev.ctrlKey) {
+          var i = S.routes.indexOf(r);
+          if (S.routes.length === ROUTES.length) S.routes = [r];
+          else if (i >= 0) { if (S.routes.length > 1) S.routes.splice(i, 1); } else S.routes.push(r);
+          S.routes.sort(function (a, c) { return ROUTES.indexOf(a) - ROUTES.indexOf(c); });
+        } else S.routes = [r];
+        changed();
+      };
+      el.appendChild(b);
+    });
+  }
+  function setSeg(id, attr, val) {
+    Array.prototype.forEach.call($(id).querySelectorAll("button"), function (b) { b.setAttribute("aria-pressed", b.getAttribute(attr) == String(val) ? "true" : "false"); });
+  }
+  function syncControls() {
+    renderRoutes();
+    setSeg("period", "data-days", S.days);
+    // почасово - не больше 31 дня, как ограничивает API
+    var hourBtn = $("gran").querySelector('[data-g="hour"]');
+    hourBtn.disabled = S.days > 31;
+    if (S.days > 31 && S.gran === "hour") S.gran = "day";
+    setSeg("gran", "data-g", S.gran);
+    $("from").value = S.from;
+    ["weather", "event", "season"].forEach(function (k) { $("k_" + k).value = S.k[k]; $("o_" + k).textContent = Number(S.k[k]).toFixed(2); });
+  }
+  Array.prototype.forEach.call($("period").querySelectorAll("button"), function (b) {
+    b.onclick = function () {
+      S.days = +b.getAttribute("data-days");
+      if (S.days === 61) S.from = "2025-11-01";
+      if (S.days >= 7 && S.gran === "hour" && S.days > 7) S.gran = "day";
+      changed();
+    };
+  });
+  Array.prototype.forEach.call($("gran").querySelectorAll("button"), function (b) { b.onclick = function () { if (!b.disabled) { S.gran = b.getAttribute("data-g"); changed(); } }; });
+  $("from").onchange = function () { if ($("from").value) { S.from = $("from").value; changed(); } };
+  ["weather", "event", "season"].forEach(function (k) {
+    $("k_" + k).oninput = function () { S.k[k] = +$("k_" + k).value; $("o_" + k).textContent = S.k[k].toFixed(2); changed(true); };
+  });
+  $("k-reset").onclick = function () { S.k = { weather: 1, event: 1, season: 1 }; changed(); };
+  $("send").onclick = function () { send(); };
+  $("copy").onclick = function () {
+    var u = location.origin + buildUrl();
+    if (navigator.clipboard) navigator.clipboard.writeText(u).then(function () { $("copy").textContent = "Скопировано"; setTimeout(function () { $("copy").textContent = "Скопировать"; }, 1200); }, function () {});
+  };
+  Array.prototype.forEach.call($("scen").querySelectorAll("button"), function (b) {
+    b.onclick = function () {
+      var s = b.getAttribute("data-s"); S.bad = null;
+      if (s === "day1") { S.routes = [7]; S.days = 1; S.gran = "hour"; }
+      if (s === "dayall") { S.routes = ROUTES.slice(); S.days = 1; S.gran = "hour"; }
+      if (s === "month") { S.routes = [7]; S.days = 30; S.gran = "day"; S.from = "2025-11-01"; }
+      if (s === "heavy") { S.routes = ROUTES.slice(); S.days = 30; S.gran = "hour"; S.from = "2025-11-01"; }
+      if (s === "err") { S.bad = "99"; }
+      syncControls(); send();
+    };
+  });
+
+  var debounce;
+  function changed(slider) {
+    S.bad = null; syncControls(); $("url").innerHTML = urlHtml(buildUrl());
+    if (!$("auto").checked) return;
+    clearTimeout(debounce); debounce = setTimeout(send, slider ? 90 : 0);
+  }
+
+  function kParams() {
+    var q = "";
+    ["weather", "event", "season"].forEach(function (k) { if (S.k[k] !== 1) q += "&k_" + k + "=" + S.k[k].toFixed(2); });
+    return q;
+  }
+  function buildUrl() {
+    var to = isoAdd(S.from, S.days - 1); if (to > "2025-12-31") to = "2025-12-31";
+    var r = S.bad || (S.routes.length === ROUTES.length ? "" : S.routes.join(","));
+    return "/api/v1/forecast?" + (r ? "route=" + r + "&" : "") + "from=" + S.from + (to !== S.from ? "&to=" + to : "") + "&granularity=" + S.gran + kParams();
+  }
+  function urlHtml(u) {
+    var i = u.indexOf("?");
+    return esc(u.slice(0, i + 1)) + u.slice(i + 1).split("&").map(function (p) {
+      var kv = p.split("="); return esc(kv[0]) + "=<span class=\"q\">" + esc(kv[1]) + "</span>";
+    }).join("&amp;");
+  }
+
+  /* ---------- запрос ---------- */
+  var seq = 0;
+  function timingHeader(h) {
+    var out = {};
+    (h || "").split(",").forEach(function (p) { var m = p.trim().match(/^(\w+);dur=([\d.]+)/); if (m) out[m[1]] = +m[2]; });
+    return out;
+  }
+  function send() {
+    var u = buildUrl(), my = ++seq, t0 = performance.now();
+    $("url").innerHTML = urlHtml(u);
+    $("csv").href = u.replace("/api/v1/forecast?", "/api/v1/forecast/export?");
+    $("status").className = "status wait"; $("status").textContent = "отправлен";
+    fetch(u, { cache: "no-store" }).then(function (r) {
+      return r.text().then(function (txt) { return { r: r, txt: txt, t: performance.now() - t0 }; });
+    }).then(function (x) {
+      if (my !== seq) return;
+      var body = null; try { body = JSON.parse(x.txt); } catch (e) {}
+      var tm = timingHeader(x.r.headers.get("Server-Timing"));
+      logRow(u, x.r.status, body, tm, x.t);
+      $("status").className = "status " + (x.r.ok ? "ok" : "err");
+      $("status").textContent = x.r.status + (x.r.ok ? " OK" : " " + (body && body.error ? body.error.code : ""));
+      $("k-client").textContent = nf(x.t, 1) + " мс";
+      $("k-bytes").textContent = x.txt.length > 1024 ? nf(x.txt.length / 1024, 1) + " КБ" : x.txt.length + " Б";
+      $("json").innerHTML = jsonHtml(x.txt);
+      $("json-note").textContent = x.r.headers.get("Server-Timing") ? "Server-Timing: " + x.r.headers.get("Server-Timing").replace(/;dur=/g, " ").replace(/, /g, " · ") : "";
+      if (!x.r.ok) {
+        $("k-rows").textContent = "0"; $("k-model").textContent = "-"; $("k-server").textContent = "-";
+        waterfall({}, x.t);
+        $("viz").innerHTML = '<p class="empty">Сервис ответил ошибкой ' + x.r.status + ': ' + esc(body && body.error ? body.error.message : x.txt) + "</p>";
+        return;
+      }
+      S.last = body;
+      var srv = (tm.parse || 0) + (tm.runner || 0) + (tm.model || 0) + (tm.rollup || 0) + (tm.json || 0);
+      $("k-rows").textContent = nf(body.meta.rows);
+      $("k-model").textContent = nf(tm.model, 2) + " мс";
+      $("k-server").textContent = nf(srv, 2) + " мс";
+      $("req-note").textContent = "модель " + body.meta.model + ", k = " + body.k.toFixed(2);
+      waterfall(tm, x.t);
+      renderViz(body);
+    }).catch(function (e) {
+      if (my !== seq) return;
+      $("status").className = "status err"; $("status").textContent = "нет связи";
+      $("viz").innerHTML = '<p class="empty">Сервис не отвечает: ' + esc(e.message) + "</p>";
+    });
+  }
+
+  var PARTS = [["parse", "разбор", "--t-parse"], ["runner", "HTTP до раннера", "--t-feat"], ["model", "раннер: CNN", "--t-model"], ["rollup", "свёртка и k", "--t-roll"], ["json", "JSON", "--t-json"], ["net", "сеть и браузер", "--t-net"]];
+  function waterfall(tm, client) {
+    var srv = 0; PARTS.slice(0, 5).forEach(function (p) { srv += tm[p[0]] || 0; });
+    var vals = {}; PARTS.forEach(function (p) { vals[p[0]] = p[0] === "net" ? Math.max(client - srv, 0) : (tm[p[0]] || 0); });
+    $("wf").innerHTML = PARTS.map(function (p) {
+      var w = client > 0 ? 100 * vals[p[0]] / client : 0;
+      return '<span style="width:' + w.toFixed(2) + "%;background:var(" + p[2] + ')" title="' + p[1] + ": " + nf(vals[p[0]], 3) + ' мс"></span>';
+    }).join("");
+    $("wf-legend").innerHTML = PARTS.map(function (p) {
+      return '<span><i style="background:var(' + p[2] + ')"></i>' + p[1] + " <span class=\"mono\">" + nf(vals[p[0]], vals[p[0]] < 1 ? 3 : 1) + "</span> мс</span>";
+    }).join("");
+  }
+
+  function jsonHtml(txt) {
+    var pretty; try { pretty = JSON.stringify(JSON.parse(txt), function (k, v) { return Array.isArray(v) && v.length > 24 && typeof v[0] === "number" ? v.slice(0, 24).concat(["... ещё " + (v.length - 24)]) : v; }, 2); } catch (e) { pretty = txt; }
+    return esc(pretty).replace(/(&quot;[^&]*?&quot;)(\s*:)/g, '<span class="k">$1</span>$2').replace(/:\s(&quot;.*?&quot;)/g, ': <span class="s">$1</span>').replace(/(?<![\w"])(-?\d+(\.\d+)?)(?=[,\n\]])/g, '<span class="n">$1</span>');
+  }
+
+  /* ---------- визуализация ---------- */
+  function pointTime(body, i) {
+    var start = body.start.slice(0, 10);
+    if (body.step === "1h") return { date: isoAdd(start, Math.floor(i / 24)), hour: i % 24 };
+    return { date: isoAdd(start, i), hour: null };
+  }
+  function renderViz(body) {
+    if (body.series.length === 1) lineChart(body); else heatmap(body);
+  }
+  function niceTicks(max) {
+    if (max <= 0) return { max: 1, step: 1 };
+    var p = Math.pow(10, Math.floor(Math.log10(max))), m = max / p, st = m <= 1.5 ? 0.25 : m <= 3 ? 0.5 : m <= 7 ? 1 : 2;
+    return { max: Math.ceil(max / (st * p)) * st * p, step: st * p };
+  }
+  function lineChart(body) {
+    var s = body.series[0], v = s.values, n = v.length;
+    var box = document.createElement("div"); box.className = "chart";
+    $("viz").innerHTML = ""; $("viz").appendChild(box);
+    var cap = document.createElement("p"); cap.className = "small muted";
+    var pk = pointTime(body, s.peak_index);
+    cap.innerHTML = "Маршрут <b>" + s.route + "</b>: всего <span class=\"mono\">" + nf(s.total) + "</span> посадок, пик <span class=\"mono\">" + nf(v[s.peak_index]) + "</span> в " +
+      dlab(pk.date) + (pk.hour != null ? ", " + hh(pk.hour) : "") + ". Точек в ответе: " + n + ".";
+    $("viz").appendChild(cap);
+    var W = box.clientWidth, H = box.clientHeight, m = { l: 52, r: 10, t: 12, b: 30 }, iw = W - m.l - m.r, ih = H - m.t - m.b;
+    var tk = niceTicks(Math.max.apply(null, v) * 1.05);
+    var X = function (i) { return n === 1 ? m.l + iw / 2 : m.l + i * iw / (n - 1); };
+    var bw = Math.max(2, Math.min(26, iw / n - 3));
+    var Y = function (y) { return m.t + ih - y / tk.max * ih; };
+    var svg = '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + " " + H + '">';
+    // ночь 01:00-05:30 без движения: подложка
+    for (var y = 0; y <= tk.max + 1e-9; y += tk.step) {
+      svg += '<line x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + Y(y) + '" y2="' + Y(y) + '" stroke="rgba(230,237,243,.07)"/>';
+      svg += '<text x="' + (m.l - 8) + '" y="' + (Y(y) + 4) + '" text-anchor="end" fill="#7d8a99" font-family="JetBrains Mono, monospace" font-size="11">' + (y >= 1000 ? nf(y / 1000, y % 1000 ? 1 : 0) + "k" : y) + "</text>";
+    }
+    var useBars = n <= 62;
+    var every = body.step === "1h" ? (n <= 24 ? 3 : 24) : (n <= 10 ? 1 : 7);
+    for (var i = 0; i < n; i += every) {
+      var pt = pointTime(body, i);
+      var lab = body.step === "1h" && n <= 24 ? hh(pt.hour).slice(0, 2) : dlab(pt.date);
+      svg += '<text x="' + X(i) + '" y="' + (H - 10) + '" text-anchor="middle" fill="#7d8a99" font-size="11" font-family="Onest, sans-serif">' + lab + "</text>";
+    }
+    if (useBars) {
+      for (var j = 0; j < n; j++) {
+        var sel = S.sel && S.sel.i === j;
+        svg += '<rect data-i="' + j + '" x="' + (X(j) - bw / 2) + '" y="' + Y(v[j]) + '" width="' + bw + '" height="' + Math.max(0, m.t + ih - Y(v[j])) +
+          '" rx="3" fill="' + (sel ? "#f0b43c" : j === s.peak_index ? "#5aa2f0" : "#2c6fbe") + '"/>';
+      }
+    } else {
+      var d = ""; for (var q = 0; q < n; q++) d += (q ? "L" : "M") + X(q).toFixed(1) + "," + Y(v[q]).toFixed(1);
+      svg += '<path d="' + d + 'L' + X(n - 1) + "," + (m.t + ih) + "L" + X(0) + "," + (m.t + ih) + 'Z" fill="rgba(63,142,232,.14)"/>';
+      svg += '<path d="' + d + '" fill="none" stroke="#3f8ee8" stroke-width="2" stroke-linejoin="round"/>';
+      if (S.sel && S.sel.i < n) svg += '<circle cx="' + X(S.sel.i) + '" cy="' + Y(v[S.sel.i]) + '" r="5" fill="#f0b43c" stroke="#131a22" stroke-width="2"/>';
+    }
+    svg += '<line id="xh" y1="' + m.t + '" y2="' + (m.t + ih) + '" stroke="#7d8a99" stroke-dasharray="3 3" style="display:none"/>';
+    svg += '<rect id="hit" x="' + m.l + '" y="' + m.t + '" width="' + iw + '" height="' + ih + '" fill="transparent" style="cursor:pointer"/></svg>';
+    box.innerHTML = svg;
+    var tip = document.createElement("div"); tip.className = "tip"; tip.hidden = true; box.appendChild(tip);
+    var hit = box.querySelector("#hit"), xh = box.querySelector("#xh");
+    var idx = function (ev) { var r = box.getBoundingClientRect(); return Math.max(0, Math.min(n - 1, Math.round((ev.clientX - r.left - m.l) / iw * (n - 1)))); };
+    hit.onmousemove = function (ev) {
+      var i = idx(ev), pt = pointTime(body, i);
+      xh.setAttribute("x1", X(i)); xh.setAttribute("x2", X(i)); xh.style.display = "";
+      tip.innerHTML = "<b>" + dlab(pt.date) + ", " + wdOf(pt.date) + (pt.hour != null ? ", " + hh(pt.hour) : "") + '</b><br><span class="mono">' + nf(v[i]) + "</span> посадок";
+      tip.hidden = false;
+      var tx = X(i) + 12; if (tx + tip.offsetWidth > W) tx = X(i) - tip.offsetWidth - 12;
+      tip.style.left = tx + "px"; tip.style.top = "8px";
+    };
+    hit.onmouseleave = function () { tip.hidden = true; xh.style.display = "none"; };
+    hit.onclick = function (ev) { var i = idx(ev); S.sel = { i: i, route: s.route }; explainPoint(body, s.route, i); lineChart(body); };
+    if (!S.sel || S.sel.route !== s.route || S.sel.i >= n) { S.sel = { i: s.peak_index, route: s.route }; explainPoint(body, s.route, s.peak_index); lineChart(body); }
+    else explainPoint(body, s.route, S.sel.i);
+  }
+
+  function blue(t) { // последовательная шкала одного оттенка: тёмный -> светлый синий
+    var a = [22, 36, 54], b = [138, 196, 255];
+    return "rgb(" + a.map(function (x, i) { return Math.round(x + (b[i] - x) * Math.pow(t, 0.8)); }).join(",") + ")";
+  }
+  function heatmap(body) {
+    var n = body.series[0].values.length, max = 0;
+    body.series.forEach(function (s) { s.values.forEach(function (x) { if (x > max) max = x; }); });
+    var cols = n, h = '<div class="hm"><table><thead><tr><th></th>';
+    var every = body.step === "1h" ? (n <= 24 ? 1 : 24) : 1;
+    for (var i = 0; i < cols; i++) {
+      var pt = pointTime(body, i);
+      h += "<th>" + (i % every === 0 ? (body.step === "1h" && n <= 24 ? pt.hour : dlab(pt.date).split(" ")[0]) : "") + "</th>";
+    }
+    h += '<th class="t">всего</th></tr></thead><tbody>';
+    body.series.forEach(function (s) {
+      h += '<tr><td class="r"><span class="plate" style="display:inline-flex;align-items:center;justify-content:center;height:24px;min-width:34px;cursor:default">' + s.route + "</span></td>";
+      s.values.forEach(function (x, i) {
+        var sel = S.sel && S.sel.route === s.route && S.sel.i === i;
+        var pt = pointTime(body, i);
+        h += '<td class="c' + (sel ? " sel" : "") + '" data-r="' + s.route + '" data-i="' + i + '" style="background:' + blue(max ? x / max : 0) + '" title="' +
+          "Маршрут " + s.route + ", " + dlab(pt.date) + (pt.hour != null ? ", " + hh(pt.hour) : "") + ": " + nf(x) + '"></td>';
+      });
+      h += '<td class="t mono">' + nf(s.total) + "</td></tr>";
+    });
+    h += "</tbody></table></div>";
+    h += '<div class="scale"><span>0</span><span class="bar" style="background:linear-gradient(90deg,' + blue(0) + "," + blue(.5) + "," + blue(1) + ')"></span><span class="mono">' + nf(max) + '</span><span>посадок за ' + (body.step === "1h" ? "час" : "день") + "</span></div>";
+    $("viz").innerHTML = h;
+    Array.prototype.forEach.call($("viz").querySelectorAll("td.c"), function (td) {
+      td.onclick = function () {
+        S.sel = { route: +td.getAttribute("data-r"), i: +td.getAttribute("data-i") };
+        heatmap(body); explainPoint(body, S.sel.route, S.sel.i);
+      };
+    });
+    if (!S.sel || body.series.every(function (s) { return s.route !== S.sel.route; }) || S.sel.i >= n) {
+      var s0 = body.series.filter(function (s) { return s.route !== 5; })[0] || body.series[0];
+      S.sel = { route: s0.route, i: s0.peak_index }; heatmap(body); explainPoint(body, s0.route, s0.peak_index);
+    } else explainPoint(body, S.sel.route, S.sel.i);
+  }
+
+  /* ---------- разбор точки: отдельный запрос /explain ---------- */
+  var exSeq = 0;
+  function explainPoint(body, route, i) {
+    var pt = pointTime(body, i), my = ++exSeq;
+    var hour = pt.hour != null ? pt.hour : 8;
+    var u = "/api/v1/explain?route=" + route + "&date=" + pt.date + "&hour=" + hour + kParams();
+    $("ex-url").textContent = "GET " + u;
+    fetch(u, { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (e) {
+      if (my !== exSeq) return;
+      if (e.error) { $("explain").innerHTML = '<p class="empty">' + esc(e.error.message) + "</p>"; return; }
+      var c = e.calendar, mi = e.model_input || {}, hs = e.history;
+      var inRows = "";
+      Object.keys(mi).forEach(function (nm) { inRows += '<span class="k">' + nm + "</span><span>" + nf(mi[nm], Number.isInteger(mi[nm]) ? 0 : 4) + '</span><span class="h">' + (nm === "route_index" ? "int64" : "float32") + "</span>"; });
+      var dayNote = pt.hour == null ? '<p class="small dim">В ответе по дням это сумма 24 часов. Здесь разобран один час, 08:00.</p>' : "";
+      var mid = e.fallback
+        ? '<li><span class="n">2</span><div><h3>Нет истории</h3><div class="small muted">Маршрут ' + route + " пуст в истории, CNN его не считает: раннер отдаёт 0.</div></div></li>"
+        : '<li><span class="n">2</span><div><h3>История: вход энкодера</h3><div class="small muted">' + dlab(hs.from) + " .. " + dlab(hs.to) + ", 504 часа, " + nf(hs.boardings) + " посадок. Энкодер сворачивает её в вектор из 672 чисел один раз при старте раннера. В " + WD[c.weekday] + " в " + hh(e.hour) + " в истории в среднем " + nf(hs.same_weekday_hour, 1) + ".</div></div></li>" +
+          '<li><span class="n">3</span><div><h3>Вход головы: ' + Object.keys(mi).length + ' признаков + вектор истории</h3><div class="kv">' + inRows + "</div></div></li>";
+      $("explain").innerHTML =
+        '<ol class="steps">' +
+        '<li><span class="n">1</span><div><h3>Ячейка</h3><span class="mono">маршрут ' + route + " · " + e.date + " (" + WD[c.weekday] + ") · " + hh(e.hour) + "</span>" + dayNote + "</div></li>" + mid +
+        '<li><span class="n">4</span><div><h3>' + esc(e.model) + ", " + nf(e.parameters) + ' параметров</h3><div class="formula">час ' + hh(e.hour) + ": softplus(выход) × scale = " + nf(e.raw, 3) +
+        "\n× k " + e.k.toFixed(2) + " = " + nf(e.raw * e.k, 3) + '</div><span class="small dim">раннер посчитал день за ' + e.model_us + " мкс</span></div></li>" +
+        '<li><span class="n">5</span><div><h3>В ответе API</h3><span class="big">' + nf(e.value) + '</span> <span class="muted">посадок</span></div></li></ol>';
+    }).catch(function () {});
+  }
+
+  /* ---------- журнал ---------- */
+  var LOG = [];
+  function logRow(u, status, body, tm, t) {
+    var srv = (tm.parse || 0) + (tm.runner || 0) + (tm.model || 0) + (tm.rollup || 0) + (tm.json || 0);
+    LOG.unshift({ at: new Date(), u: u, status: status, rows: body && body.meta ? body.meta.rows : 0, model: tm.model, srv: srv, t: t, state: JSON.parse(JSON.stringify({ routes: S.routes, days: S.days, from: S.from, gran: S.gran, k: S.k, bad: S.bad })) });
+    LOG = LOG.slice(0, 12);
+    $("log").innerHTML = LOG.map(function (x, i) {
+      return '<tr data-i="' + i + '"><td class="mono">' + x.at.toLocaleTimeString("ru-RU") + '</td><td class="u" title="' + esc(x.u) + '">' + esc(x.u.replace("/api/v1/forecast?", "")) +
+        '</td><td><span class="status ' + (x.status < 400 ? "ok" : "err") + '">' + x.status + '</span></td><td class="r">' + nf(x.rows) + '</td><td class="r">' +
+        (x.model != null ? nf(x.model, 2) : "-") + '</td><td class="r">' + (x.srv ? nf(x.srv, 2) : "-") + '</td><td class="r">' + nf(x.t, 1) + "</td></tr>";
+    }).join("");
+    Array.prototype.forEach.call($("log").querySelectorAll("tr"), function (tr) {
+      tr.onclick = function () { var x = LOG[+tr.getAttribute("data-i")]; Object.assign(S, JSON.parse(JSON.stringify(x.state))); syncControls(); send(); };
+    });
+  }
+
+  /* ---------- нагрузка из браузера ---------- */
+  var L = { on: false, lat: [], hist: [], prev: null, stop: 0 };
+  function randDate(maxOffset) { var d = Math.floor(Math.random() * Math.max(1, 61 - maxOffset)); return isoAdd("2025-11-01", d); }
+  function loadUrl() {
+    var mix = $("lmix").value, r = Math.random(), rt = ROUTES[1 + Math.floor(Math.random() * 9)];
+    if (mix === "current") { var f = randDate(S.days); var to = isoAdd(f, S.days - 1); return "/api/v1/forecast?" + (S.routes.length === ROUTES.length ? "" : "route=" + S.routes.join(",") + "&") + "from=" + f + (S.days > 1 ? "&to=" + to : "") + "&granularity=" + S.gran; }
+    if (mix === "heavy" || r > 0.95) { var h = randDate(30); return "/api/v1/forecast?from=" + h + "&to=" + isoAdd(h, 29) + "&granularity=hour"; }
+    if (r < 0.6) return "/api/v1/forecast?route=" + rt + "&from=" + randDate(1) + "&granularity=hour";
+    if (r < 0.8) return "/api/v1/forecast?from=" + randDate(1) + "&granularity=hour";
+    var m = randDate(30); return "/api/v1/forecast?route=" + rt + "&from=" + m + "&to=" + isoAdd(m, 29) + "&granularity=day";
+  }
+  function worker() {
+    if (!L.on) return;
+    var t0 = performance.now();
+    fetch(loadUrl(), { cache: "no-store" }).then(function (r) { return r.arrayBuffer(); }).then(function () { L.lat.push(performance.now() - t0); }).catch(function () {}).then(function () { if (performance.now() < L.stop) worker(); });
+  }
+  function pct(a, p) { if (!a.length) return 0; var s = a.slice().sort(function (x, y) { return x - y; }); return s[Math.min(s.length - 1, Math.floor(p * s.length))]; }
+  function pollStats() {
+    return fetch("/api/v1/stats", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (st) {
+      st.t = performance.now();
+      if (L.prev) {
+        var dt = (st.t - L.prev.t) / 1000, rps = (st.requests - L.prev.requests) / dt, rows = (st.rows - L.prev.rows) / dt, cpu = 100 * (st.cpu_s - L.prev.cpu_s) / dt;
+        $("l-rps").textContent = nf(rps); $("l-rows").textContent = rows > 1e6 ? nf(rows / 1e6, 2) + " млн" : nf(rows);
+        $("l-cpu").textContent = nf(cpu) + "%"; $("l-mem").textContent = nf(st.heap_mb, 1) + " МБ";
+        if (L.on || L.hist.length) { L.hist.push({ rps: rps, cpu: cpu, p95: pct(L.lat, .95) }); L.hist = L.hist.slice(-60); spark(); }
+        if (L.lat.length) { $("l-p50").textContent = nf(pct(L.lat, .5), 1) + " мс"; $("l-p95").textContent = nf(pct(L.lat, .95), 1) + " мс"; }
+        L.lat = [];
+      }
+      L.prev = st;
+    }).catch(function () {});
+  }
+  function spark() {
+    var box = $("spark"), W = box.clientWidth, H = box.clientHeight, h = L.hist, n = h.length;
+    if (!n) { box.innerHTML = ""; return; }
+    var mx = Math.max.apply(null, h.map(function (x) { return x.rps; })) || 1;
+    var X = function (i) { return n === 1 ? W : 4 + i * (W - 8) / (n - 1); }, Y = function (v) { return H - 16 - v / mx * (H - 26); };
+    var d = h.map(function (x, i) { return (i ? "L" : "M") + X(i).toFixed(1) + "," + Y(x.rps).toFixed(1); }).join("");
+    var last = h[n - 1];
+    box.innerHTML = '<svg width="' + W + '" height="' + H + '"><line x1="0" x2="' + W + '" y1="' + (H - 16) + '" y2="' + (H - 16) + '" stroke="rgba(230,237,243,.1)"/>' +
+      (n > 1 ? '<path d="' + d + "L" + X(n - 1) + "," + (H - 16) + "L" + X(0) + "," + (H - 16) + 'Z" fill="rgba(240,180,60,.12)"/><path d="' + d + '" fill="none" stroke="#f0b43c" stroke-width="2"/>' : "") +
+      '<circle cx="' + X(n - 1) + '" cy="' + Y(last.rps) + '" r="4" fill="#f0b43c"/>' +
+      '<text x="4" y="' + (H - 2) + '" fill="#7d8a99" font-size="11" font-family="Onest, sans-serif">RPS сервера за последние ' + n + ' с, максимум ' + nf(mx) + "</text></svg>";
+  }
+  $("load-btn").onclick = function () {
+    if (L.on) { L.on = false; L.stop = 0; return; }
+    L.on = true; L.stop = performance.now() + 15000; L.hist = []; L.lat = [];
+    $("load-btn").textContent = "Остановить"; $("load-btn").classList.remove("primary"); $("load-btn").classList.add("danger");
+    $("load-pill").classList.add("on"); $("load-pill").lastChild.textContent = "идёт";
+    for (var i = 0; i < +$("conc").value; i++) worker();
+    var iv = setInterval(function () {
+      if (performance.now() >= L.stop || !L.on) {
+        L.on = false; clearInterval(iv);
+        $("load-btn").textContent = "Запустить на 15 с"; $("load-btn").classList.add("primary"); $("load-btn").classList.remove("danger");
+        $("load-pill").classList.remove("on"); $("load-pill").lastChild.textContent = "стоит";
+      }
+    }, 250);
+  };
+  setInterval(pollStats, 1000); pollStats();
+
+  var rz; window.addEventListener("resize", function () { clearTimeout(rz); rz = setTimeout(function () { if (S.last) renderViz(S.last); spark(); }, 150); });
+  syncControls(); send();
+})();
+</script>
+</body>
+</html>
