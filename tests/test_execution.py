@@ -158,8 +158,7 @@ def test_cli_contracts_without_execution(prepared, capsys):
         "compare",
         "refit",
         "predict",
-        "export-onnx",
-        "serve",
+        "export-head",
     ):
         with pytest.raises(SystemExit) as exc:
             build_parser().parse_args([command, "--help"])

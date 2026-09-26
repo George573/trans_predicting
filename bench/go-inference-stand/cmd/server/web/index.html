@@ -26,7 +26,6 @@
   --warn: #e8a33c;
   --bad: #ec6b61;
   --t-parse: #7d8a99;
-  --t-feat: #9085e9;
   --t-model: #3f8ee8;
   --t-roll: #199e70;
   --t-json: #d55181;
@@ -161,7 +160,7 @@ table.log tr { cursor: pointer; } table.log tr:hover td { background: var(--pane
   <aside class="rail" aria-label="Управление">
     <div class="brand">
       <h1>Пульт прогноза</h1>
-      <span class="small dim">Каждое действие отправляет настоящий запрос в Go-сервис, CNN считает раннер на ONNX Runtime.</span>
+      <span class="small dim">Каждое действие отправляет настоящий запрос в Go-сервис, голову CNN он считает сам.</span>
     </div>
     <div class="modelbox" id="modelbox">загружаю модель...</div>
 
@@ -297,8 +296,8 @@ table.log tr { cursor: pointer; } table.log tr:hover td { background: var(--pane
 
   /* ---------- модель ---------- */
   fetch("/api/v1/model").then(function (r) { return r.json(); }).then(function (m) {
-    $("modelbox").innerHTML = "<span><b>" + esc(m.model) + "</b>, " + nf(m.runner.parameters) + " параметров</span><span>история " + m.runner.history.from + " .. " + m.runner.history.to +
-      "</span><span>горизонт " + m.from + " .. " + m.to + "</span><span>" + esc(m.runner.engine) + "</span><span>GOMAXPROCS=" + m.gomaxprocs + ", " + esc(m.go) + "</span>";
+    $("modelbox").innerHTML = "<span><b>" + esc(m.model) + "</b>, " + nf(m.parameters) + " параметров</span><span>история " + m.history.from + " .. " + m.history.to +
+      "</span><span>горизонт " + m.from + " .. " + m.to + "</span><span>голова CNN в Go, float32</span><span>GOMAXPROCS=" + m.gomaxprocs + ", " + esc(m.go) + "</span>";
   }).catch(function () { $("modelbox").textContent = "сервис не отвечает"; });
 
   /* ---------- управление ---------- */
@@ -426,7 +425,7 @@ table.log tr { cursor: pointer; } table.log tr:hover td { background: var(--pane
         return;
       }
       S.last = body;
-      var srv = (tm.parse || 0) + (tm.runner || 0) + (tm.model || 0) + (tm.rollup || 0) + (tm.json || 0);
+      var srv = (tm.parse || 0) + (tm.model || 0) + (tm.rollup || 0) + (tm.json || 0);
       $("k-rows").textContent = nf(body.meta.rows);
       $("k-model").textContent = nf(tm.model, 2) + " мс";
       $("k-server").textContent = nf(srv, 2) + " мс";
@@ -440,9 +439,9 @@ table.log tr { cursor: pointer; } table.log tr:hover td { background: var(--pane
     });
   }
 
-  var PARTS = [["parse", "разбор", "--t-parse"], ["runner", "HTTP до раннера", "--t-feat"], ["model", "раннер: CNN", "--t-model"], ["rollup", "свёртка и k", "--t-roll"], ["json", "JSON", "--t-json"], ["net", "сеть и браузер", "--t-net"]];
+  var PARTS = [["parse", "разбор", "--t-parse"], ["model", "CNN", "--t-model"], ["rollup", "свёртка и k", "--t-roll"], ["json", "JSON", "--t-json"], ["net", "сеть и браузер", "--t-net"]];
   function waterfall(tm, client) {
-    var srv = 0; PARTS.slice(0, 5).forEach(function (p) { srv += tm[p[0]] || 0; });
+    var srv = 0; PARTS.slice(0, -1).forEach(function (p) { srv += tm[p[0]] || 0; });
     var vals = {}; PARTS.forEach(function (p) { vals[p[0]] = p[0] === "net" ? Math.max(client - srv, 0) : (tm[p[0]] || 0); });
     $("wf").innerHTML = PARTS.map(function (p) {
       var w = client > 0 ? 100 * vals[p[0]] / client : 0;
@@ -585,14 +584,14 @@ table.log tr { cursor: pointer; } table.log tr:hover td { background: var(--pane
       Object.keys(mi).forEach(function (nm) { inRows += '<span class="k">' + nm + "</span><span>" + nf(mi[nm], Number.isInteger(mi[nm]) ? 0 : 4) + '</span><span class="h">' + (nm === "route_index" ? "int64" : "float32") + "</span>"; });
       var dayNote = pt.hour == null ? '<p class="small dim">В ответе по дням это сумма 24 часов. Здесь разобран один час, 08:00.</p>' : "";
       var mid = e.fallback
-        ? '<li><span class="n">2</span><div><h3>Нет истории</h3><div class="small muted">Маршрут ' + route + " пуст в истории, CNN его не считает: раннер отдаёт 0.</div></div></li>"
-        : '<li><span class="n">2</span><div><h3>История: вход энкодера</h3><div class="small muted">' + dlab(hs.from) + " .. " + dlab(hs.to) + ", 504 часа, " + nf(hs.boardings) + " посадок. Энкодер сворачивает её в вектор из 672 чисел один раз при старте раннера. В " + WD[c.weekday] + " в " + hh(e.hour) + " в истории в среднем " + nf(hs.same_weekday_hour, 1) + ".</div></div></li>" +
+        ? '<li><span class="n">2</span><div><h3>Нет истории</h3><div class="small muted">Маршрут ' + route + " пуст в истории, CNN его не считает: сервис отдаёт 0.</div></div></li>"
+        : '<li><span class="n">2</span><div><h3>История: вход энкодера</h3><div class="small muted">' + dlab(hs.from) + " .. " + dlab(hs.to) + ", 504 часа, " + nf(hs.boardings) + " посадок. Энкодер сворачивает её в вектор из 672 чисел один раз при сборке образа. В " + WD[c.weekday] + " в " + hh(e.hour) + " в истории в среднем " + nf(hs.same_weekday_hour, 1) + ".</div></div></li>" +
           '<li><span class="n">3</span><div><h3>Вход головы: ' + Object.keys(mi).length + ' признаков + вектор истории</h3><div class="kv">' + inRows + "</div></div></li>";
       $("explain").innerHTML =
         '<ol class="steps">' +
         '<li><span class="n">1</span><div><h3>Ячейка</h3><span class="mono">маршрут ' + route + " · " + e.date + " (" + WD[c.weekday] + ") · " + hh(e.hour) + "</span>" + dayNote + "</div></li>" + mid +
         '<li><span class="n">4</span><div><h3>' + esc(e.model) + ", " + nf(e.parameters) + ' параметров</h3><div class="formula">час ' + hh(e.hour) + ": softplus(выход) × scale = " + nf(e.raw, 3) +
-        "\n× k " + e.k.toFixed(2) + " = " + nf(e.raw * e.k, 3) + '</div><span class="small dim">раннер посчитал день за ' + e.model_us + " мкс</span></div></li>" +
+        "\n× k " + e.k.toFixed(2) + " = " + nf(e.raw * e.k, 3) + '</div><span class="small dim">Go посчитал день за ' + e.model_us + " мкс</span></div></li>" +
         '<li><span class="n">5</span><div><h3>В ответе API</h3><span class="big">' + nf(e.value) + '</span> <span class="muted">посадок</span></div></li></ol>';
     }).catch(function () {});
   }
@@ -600,7 +599,7 @@ table.log tr { cursor: pointer; } table.log tr:hover td { background: var(--pane
   /* ---------- журнал ---------- */
   var LOG = [];
   function logRow(u, status, body, tm, t) {
-    var srv = (tm.parse || 0) + (tm.runner || 0) + (tm.model || 0) + (tm.rollup || 0) + (tm.json || 0);
+    var srv = (tm.parse || 0) + (tm.model || 0) + (tm.rollup || 0) + (tm.json || 0);
     LOG.unshift({ at: new Date(), u: u, status: status, rows: body && body.meta ? body.meta.rows : 0, model: tm.model, srv: srv, t: t, state: JSON.parse(JSON.stringify({ routes: S.routes, days: S.days, from: S.from, gran: S.gran, k: S.k, bad: S.bad })) });
     LOG = LOG.slice(0, 12);
     $("log").innerHTML = LOG.map(function (x, i) {

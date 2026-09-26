@@ -1,4 +1,4 @@
-// Стенд прогнозного API: CNN считается раннером на ONNX Runtime на каждый запрос, без кэша.
+// Стенд прогнозного API: голову CNN Go считает сам на каждый запрос, без кэша.
 // На "/" отдаётся интерактивный UI (web/index.html), который ходит в этот же API.
 package main
 
@@ -28,10 +28,7 @@ var webFS embed.FS
 
 var routesAll = []int{1, 5, 7, 11, 12, 17, 25, 26, 28, 50}
 
-var (
-	horizonFrom = time.Date(2025, 11, 1, 0, 0, 0, 0, time.UTC)
-	horizonTo   = time.Date(2025, 12, 31, 0, 0, 0, 0, time.UTC)
-)
+var horizonFrom, horizonTo time.Time
 
 type stats struct {
 	requests atomic.Int64
@@ -42,8 +39,7 @@ type stats struct {
 }
 
 type app struct {
-	runner  *runner
-	info    map[string]any
+	net     *network
 	name    string
 	version string
 	user    string
@@ -174,7 +170,6 @@ type series struct {
 
 type timings struct {
 	Parse  float64 `json:"parse_ms"`
-	Runner float64 `json:"runner_ms"`
 	Model  float64 `json:"model_ms"`
 	Rollup float64 `json:"rollup_ms"`
 }
@@ -190,14 +185,10 @@ func (a *app) handleForecast(w http.ResponseWriter, r *http.Request) {
 	}
 	t1 := time.Now()
 
-	// 1. один запрос в раннер на весь прогноз: маршрут x день x 24 часа
-	pr, err := a.runner.predict(p.routes, p.from, p.days)
-	if err != nil {
-		a.fail(w, http.StatusBadGateway, "runner", err.Error())
-		return
-	}
+	// 1. прогноз на весь запрос: маршрут x день x 24 часа
+	values := a.net.predict(p.routes, p.from, p.days)
+	rows := a.net.rows(p.routes, p.days)
 	t2 := time.Now()
-	model := time.Duration(pr.ModelMs * float64(time.Millisecond))
 
 	// 2. коэффициент, свёртка до часа/дня, округление
 	out := make([]series, len(p.routes))
@@ -206,7 +197,7 @@ func (a *app) handleForecast(w http.ResponseWriter, r *http.Request) {
 		for d := 0; d < p.days; d++ {
 			var day float64
 			for h := 0; h < 24; h++ {
-				v := pr.Values[ri][d*24+h] * p.k
+				v := values[ri][d*24+h] * p.k
 				day += v
 				if p.gran == "hour" {
 					s.Values = append(s.Values, int64(math.Round(v)))
@@ -234,20 +225,20 @@ func (a *app) handleForecast(w http.ResponseWriter, r *http.Request) {
 		"model_version": a.version, "start": p.from.Format("2006-01-02") + "T00:00", "step": step, "k": p.k,
 		"series": out,
 		"meta": map[string]any{
-			"rows": pr.Rows, "model": a.name,
-			"timings": timings{ms(t1.Sub(t0)), ms(t2.Sub(t1) - model), ms(model), ms(t3.Sub(t2))},
+			"rows": rows, "model": a.name,
+			"timings": timings{ms(t1.Sub(t0)), ms(t2.Sub(t1)), ms(t3.Sub(t2))},
 		},
 	})
 	t4 := time.Now()
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Header().Set("Server-Timing", fmt.Sprintf("parse;dur=%.3f, runner;dur=%.3f, model;dur=%.3f, rollup;dur=%.3f, json;dur=%.3f",
-		ms(t1.Sub(t0)), ms(t2.Sub(t1)-model), ms(model), ms(t3.Sub(t2)), ms(t4.Sub(t3))))
-	w.Header().Set("X-Model-Rows", strconv.Itoa(pr.Rows))
+	w.Header().Set("Server-Timing", fmt.Sprintf("parse;dur=%.3f, model;dur=%.3f, rollup;dur=%.3f, json;dur=%.3f",
+		ms(t1.Sub(t0)), ms(t2.Sub(t1)), ms(t3.Sub(t2)), ms(t4.Sub(t3))))
+	w.Header().Set("X-Model-Rows", strconv.Itoa(rows))
 	_, _ = w.Write(body)
 
 	a.st.requests.Add(1)
-	a.st.rows.Add(int64(pr.Rows))
-	a.st.modelNs.Add(int64(model))
+	a.st.rows.Add(int64(rows))
+	a.st.modelNs.Add(int64(t2.Sub(t1)))
 	a.st.totalNs.Add(int64(time.Since(t0)))
 }
 
@@ -274,29 +265,31 @@ func (a *app) handleExplain(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
-	ex, err := a.runner.explain(route, date)
-	if err != nil {
-		a.fail(w, http.StatusBadGateway, "runner", err.Error())
-		return
-	}
+	t0 := time.Now()
+	raw := a.net.predict([]int{route}, date, 1)[0][hour]
+	took := time.Since(t0)
+	i := slices.Index(a.net.Routes, route)
+	var input *headInput
 	var history map[string]any
-	if ex.History != nil {
-		window := a.info["history"].(map[string]any)
-		history = map[string]any{"from": window["from"], "to": window["to"], "boardings": ex.History.Boardings,
-			"same_weekday_hour": ex.History.SameWeekday[hour]}
+	if i >= 0 {
+		in := a.net.features(date)
+		in.RouteIndex = i + 1
+		input = &in
+		boardings, same := a.net.history(i, date, hour)
+		history = map[string]any{"from": a.net.first.Format("2006-01-02"), "to": a.net.cutoff.AddDate(0, 0, -1).Format("2006-01-02"),
+			"boardings": boardings, "same_weekday_hour": same}
 	}
 	weekday := int(date.Weekday())
 	if weekday == 0 {
 		weekday = 7
 	}
-	raw := ex.Values[hour]
 	writeJSON(w, http.StatusOK, map[string]any{
 		"route": route, "date": date.Format("2006-01-02"), "hour": hour,
 		"calendar": map[string]any{
 			"weekday": weekday, "day_of_month": date.Day(), "days_in_month": time.Date(date.Year(), date.Month()+1, 0, 0, 0, 0, 0, time.UTC).Day(),
 		},
-		"fallback": ex.Fallback, "model_input": ex.Input, "history": history, "model": a.name, "parameters": a.info["parameters"],
-		"raw": raw, "k": k, "value": int64(math.Round(raw * k)), "model_us": int64(ex.ModelMs * 1000),
+		"fallback": i < 0, "model_input": input, "history": history, "model": a.name, "parameters": a.net.Parameters,
+		"raw": raw, "k": k, "value": int64(math.Round(raw * k)), "model_us": took.Microseconds(),
 	})
 }
 
@@ -306,18 +299,14 @@ func (a *app) handleExport(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
-	pr, err := a.runner.predict(p.routes, p.from, p.days)
-	if err != nil {
-		a.fail(w, http.StatusBadGateway, "runner", err.Error())
-		return
-	}
+	values := a.net.predict(p.routes, p.from, p.days)
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	w.Header().Set("Content-Disposition", `attachment; filename="forecast.csv"`)
 	cw := csv.NewWriter(w)
 	cw.Comma = ';'
 	_ = cw.Write([]string{"route", "date", "hour", "prediction"})
 	for ri, route := range p.routes {
-		for i, v := range pr.Values[ri] {
+		for i, v := range values[ri] {
 			_ = cw.Write([]string{strconv.Itoa(route), p.from.AddDate(0, 0, i/24).Format("2006-01-02"), strconv.Itoa(i % 24),
 				strconv.FormatInt(int64(math.Round(v*p.k)), 10)})
 		}
@@ -327,8 +316,9 @@ func (a *app) handleExport(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) handleModel(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"model": a.name, "runner": a.info,
-		"routes": routesAll, "from": horizonFrom.Format("2006-01-02"), "to": horizonTo.Format("2006-01-02"),
+		"model": a.name, "parameters": a.net.Parameters, "checkpoint_sha256": a.net.Checkpoint,
+		"history": map[string]any{"from": a.net.first.Format("2006-01-02"), "to": a.net.cutoff.AddDate(0, 0, -1).Format("2006-01-02"), "hours": 21 * 24},
+		"routes":  routesAll, "from": horizonFrom.Format("2006-01-02"), "to": horizonTo.Format("2006-01-02"),
 		"model_version": a.version, "gomaxprocs": runtime.GOMAXPROCS(0), "go": runtime.Version(),
 	})
 }
@@ -350,21 +340,21 @@ func (a *app) handleStats(w http.ResponseWriter, _ *http.Request) {
 
 func main() {
 	addr := flag.String("addr", ":8080", "listen")
-	runnerURL := flag.String("runner", "http://localhost:8000", "адрес раннера CNN (python -m tram_forecast serve)")
+	modelPath := flag.String("model", "head.json", "голова CNN (python -m tram_forecast export-head)")
 	auth := flag.String("auth", "", "user:pass для basic auth на UI и API (пусто = выкл)")
 	flag.Parse()
 
-	rn := newRunner(*runnerURL)
-	info, err := rn.model()
+	net, err := loadNetwork(*modelPath)
 	if err != nil {
 		log.Fatal(err)
 	}
-	name := fmt.Sprintf("cnn-%v", info["model_kind"])
-	a := &app{runner: rn, info: info, name: name, version: fmt.Sprintf("%s-%d", name, time.Now().Unix()), started: time.Now()}
+	horizonFrom, horizonTo = net.cutoff, net.cutoff.AddDate(0, 0, net.ForecastDays-1)
+	name := "cnn-" + net.ModelKind
+	a := &app{net: net, name: name, version: fmt.Sprintf("%s-%d", name, time.Now().Unix()), started: time.Now()}
 	if u, p, ok := strings.Cut(*auth, ":"); ok {
 		a.user, a.pass = u, p
 	}
-	log.Printf("%s: %v параметров, %v; GOMAXPROCS=%d; http://localhost%s", name, info["parameters"], info["engine"], runtime.GOMAXPROCS(0), *addr)
+	log.Printf("%s: %d параметров, сверка с torch по %d дням пройдена; GOMAXPROCS=%d; http://localhost%s", name, net.Parameters, len(net.Check), runtime.GOMAXPROCS(0), *addr)
 
 	web, _ := fs.Sub(webFS, "web")
 	mux := http.NewServeMux()
