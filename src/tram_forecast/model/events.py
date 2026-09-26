@@ -21,7 +21,9 @@ class EventEncoder(nn.Module):
             for v, d in zip(vocab_sizes, config.embedding_dims)
         )
         self.e1 = MultiscaleConv1d(sum(config.embedding_dims), config.event1)
-        self.e2 = MultiscaleConv1d(32, config.event2)
+        self.e2 = (MultiscaleConv1d(sum(p[0] for p in config.event1), config.event2)
+                   if config.event_depth == 2 else None)
+        self.width = sum(p[0] for p in (config.event1, config.event2)[config.event_depth - 1])
         self.config = config
 
     def features(self, ids, lengths):
@@ -44,10 +46,13 @@ class EventEncoder(nn.Module):
             [embedding(ids[:, :, i]) for i, embedding in enumerate(self.embeddings)],
             dim=-1,
         ).transpose(1, 2)
-        return self.e2(self.e1(x, mask), mask), mask
+        x = self.e1(x, mask)
+        return (self.e2(x, mask) if self.e2 is not None else x), mask
 
     def forward(self, ids, lengths):
         features, mask = self.features(ids, lengths)
+        if self.config.event_pool == "avg":
+            return features.sum(dim=-1) / lengths.clamp_min(1)[:, None]
         # All-empty rows have a finite zero reduction; do not backprop through -inf.
         safe = mask | (lengths == 0)[:, None, None]
         return features.masked_fill(~safe, float("-inf")).max(dim=-1).values
@@ -62,7 +67,8 @@ class EventEncoder(nn.Module):
     def _tile(self, ids, start, stop):
         lengths = torch.tensor([ids.shape[1]], device=ids.device)
         features, _ = self.features(ids, lengths)
-        return features[:, :, start:stop].max(dim=-1).values
+        core = features[:, :, start:stop]
+        return core.sum(dim=-1) if self.config.event_pool == "avg" else core.max(dim=-1).values
 
     def encode_long_hour(self, hour):
         device = self.embeddings[0].weight.device
@@ -79,11 +85,12 @@ class EventEncoder(nn.Module):
             maximum = (
                 value
                 if maximum is None
-                else torch.where(value > maximum, value, maximum)
+                else (maximum + value if self.config.event_pool == "avg"
+                      else torch.where(value > maximum, value, maximum))
             )
         if maximum is None:
-            return self.embeddings[0].weight.new_zeros((1, 32))
-        return maximum
+            return self.embeddings[0].weight.new_zeros((1, self.width))
+        return maximum / len(hour) if self.config.event_pool == "avg" else maximum
 
     def encode_hours(self, hours):
         """Return [len(hours),32], preserving order; compact IDs may reside on CPU."""
@@ -102,7 +109,7 @@ class EventEncoder(nn.Module):
                 values = self._execute(self.forward, ids, lengths)
             outputs.append(values)
             positions.extend(chunk.indices)
-        result = self.embeddings[0].weight.new_zeros((len(hours), 32))
+        result = self.embeddings[0].weight.new_zeros((len(hours), self.width))
         if outputs:
             result = result.index_copy(
                 0, torch.tensor(positions, device=device), torch.cat(outputs)

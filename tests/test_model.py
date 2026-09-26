@@ -53,9 +53,9 @@ def test_network_parameters_forward_backward_and_cache():
     torch.manual_seed(1)
     model = ForecastNetwork([12] * 5, 20).eval()
     embedding = 12 * 28 + 80
-    assert model.parameter_report()["total"] == 128704 + embedding
+    assert model.parameter_report()["total"] == 215324 + embedding
     max_model = ForecastNetwork([x + 3 for x in Config().category_caps], 20)
-    assert max_model.parameter_report()["total"] == 199268
+    assert max_model.parameter_report()["total"] == 285888
     history, request = fixture()
     out = model(history, request)
     assert out.shape == (1, 24) and torch.isfinite(out).all() and (out >= 0).all()

@@ -71,6 +71,7 @@ class TrainSettings:
     device: str = "cpu"
     output_root: str = "outputs/runs"
     num_workers: int = 0
+    context_start_days: int | None = None
 
     def __post_init__(self):
         if type(self.forecast_days) is not int or not 1 <= self.forecast_days <= 61:
@@ -80,6 +81,10 @@ class TrainSettings:
             for v in (self.batch_size, self.accumulation, self.epochs, self.patience)
         ):
             raise ValueError("training counts must be positive integers")
+        if self.context_start_days is not None and (
+            type(self.context_start_days) is not int or self.context_start_days < 1
+        ):
+            raise ValueError("context_start_days must be a positive integer or null")
         if self.num_workers != 0:
             raise ValueError("v1 requires num_workers=0 to bound prefetch memory")
         if (

@@ -58,13 +58,17 @@ def metric_report(actual, predicted, routes):
     return report
 
 
-def weekly_profile(store, days):
+def weekly_profile(store, days, history_days=21):
+    validate_horizon(days)
+    if type(history_days) is not int or history_days < 7:
+        raise ValueError("weekly profile requires at least seven history days")
     output = []
     dates = [store.end + timedelta(days=i) for i in range(days)]
-    historic = [store.end - timedelta(days=21) + timedelta(days=i) for i in range(21)]
+    historic = [store.end - timedelta(days=history_days) + timedelta(days=i)
+                for i in range(history_days)]
     for route in store.routes:
-        counts, _ = store.history(route, store.end, False)
-        counts = counts.reshape(21, 24)
+        counts, _ = store.history(route, store.end, False, history_days)
+        counts = counts.reshape(history_days, 24)
         output.append(
             np.stack(
                 [
@@ -88,16 +92,17 @@ def fixed_forecast(model, store, days=7):
             store,
             SampleIdentity(route, store.end, store.end),
             model.model_kind == "full",
+            model.config.history_days,
         )
         history, _, _ = collate_samples([sample], device)
         encoded = model.encode_history(history)
+        route_indices = torch.full(
+            (days,), ROUTES.index(route) + 1, device=device, dtype=torch.long
+        )
+        request_calendar_tensor = torch.as_tensor(request_calendar(dates), device=device)
+        lead = torch.arange(1, days + 1, device=device, dtype=torch.float32)
         prediction = model.predict_day(
-            encoded.expand(days, -1),
-            torch.full(
-                (days,), ROUTES.index(route) + 1, device=device, dtype=torch.long
-            ),
-            torch.as_tensor(request_calendar(dates), device=device),
-            torch.arange(1, days + 1, device=device, dtype=torch.float32),
+            encoded.expand(days, -1), route_indices, request_calendar_tensor, lead,
         )
         results.append(prediction.cpu().numpy())
     return np.stack(results)
@@ -129,4 +134,27 @@ def evaluate_model(model, store, days=7):
         "forecast_days": days,
         "artifact": store.contract_hash,
         "model_kind": model.model_kind,
+    }
+
+
+def evaluate_weekly_profiles(store, days=7, histories=(7, 21)):
+    """Evaluate simple weekly forecasts on the same neural-route validation grid."""
+    validate_horizon(days)
+    if store.metadata["regime"] != "validation":
+        raise ValueError("evaluation requires a validation artifact")
+    available = (date.fromisoformat(store.metadata["evaluation_end"]) - store.end).days
+    if days > available:
+        raise ValueError("forecast horizon exceeds available validation days")
+    actual = np.asarray(store.evaluation_targets()).reshape(
+        len(store.routes) + 1, available, 24
+    )[:-1, :days]
+    return {
+        "artifact": store.contract_hash,
+        "cutoff": str(store.end),
+        "forecast_days": days,
+        "routes": list(store.routes),
+        "baselines": [
+            {"history_days": history, **metrics(actual, weekly_profile(store, days, history))}
+            for history in histories
+        ],
     }

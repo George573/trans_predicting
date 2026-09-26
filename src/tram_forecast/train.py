@@ -19,12 +19,16 @@ from .evaluate import evaluate_model
 from .io import write_json
 from .losses import mae, normalize_gradients
 from .model import ForecastNetwork
+from .progress import TrainingProgress
 from .settings import Settings
 
 
 def train(settings, artifact, model_kind="full", output=None, resume=None, final=False):
     seed_all(settings.model.seed)
-    dataset = ForecastDataset(artifact, model_kind, settings.training.forecast_days)
+    dataset = ForecastDataset(
+        artifact, model_kind, settings.training.forecast_days,
+        settings.model.history_days, settings.training.context_start_days,
+    )
     store = dataset.store
     if store.metadata["regime"] != ("final" if final else "validation"):
         raise ValueError("training regime mismatch")
@@ -122,6 +126,16 @@ def train(settings, artifact, model_kind="full", output=None, resume=None, final
 
         history = json.loads(history_path.read_text())
         history = [entry for entry in history if entry["epoch"] <= epoch_start]
+    feedback = TrainingProgress()
+    feedback.message(
+        f"{'Resuming' if resume else 'Training'} {model_kind} on {settings.training.device} | "
+        f"{len(dataset)} contexts | batch size {settings.training.batch_size} | "
+        f"accumulation {settings.training.accumulation} | output: {output}"
+    )
+    feedback.message(
+        "Interrupt with Ctrl+C / Stop kernel. Resume from latest.pt to rerun the "
+        "partial epoch; a checkpoint is available after the first completed epoch."
+    )
     for epoch in range(epoch_start, settings.training.epochs):
         started = time.monotonic()
         model.train()
@@ -132,35 +146,41 @@ def train(settings, artifact, model_kind="full", output=None, resume=None, final
         loss_sum = 0.0
         seen = 0
         batch_size = settings.training.batch_size
-        for start in range(0, len(order), batch_size):
-            samples = [dataset[int(i)] for i in order[start : start + batch_size]]
-            inputs, request, target = collate_samples(samples, settings.training.device)
-            loss = mae(model(inputs, request), target)
-            # Weight each requested day equally, including partial end-of-period horizons.
-            count = target.shape[0]
-            (loss * count).backward()
-            accumulated += count
-            microbatches += 1
-            seen += count
-            loss_sum += float(loss.detach()) * count
-            if (
-                microbatches == settings.training.accumulation
-                or start + batch_size >= len(order)
-            ):
-                normalize_gradients(model.parameters(), accumulated)
-                torch.nn.utils.clip_grad_norm_(
-                    model.parameters(),
-                    settings.training.clip_norm,
-                    error_if_nonfinite=True,
+        total_batches = math.ceil(len(order) / batch_size)
+        with feedback.epoch(epoch + 1, settings.training.epochs, total_batches):
+            for start in range(0, len(order), batch_size):
+                samples = [dataset[int(i)] for i in order[start : start + batch_size]]
+                inputs, request, target = collate_samples(samples, settings.training.device)
+                loss = mae(model(inputs, request), target)
+                # Weight each requested day equally, including partial end-of-period horizons.
+                count = target.shape[0]
+                (loss * count).backward()
+                accumulated += count
+                microbatches += 1
+                seen += count
+                loss_sum += float(loss.detach()) * count
+                if (
+                    microbatches == settings.training.accumulation
+                    or start + batch_size >= len(order)
+                ):
+                    normalize_gradients(model.parameters(), accumulated)
+                    torch.nn.utils.clip_grad_norm_(
+                        model.parameters(),
+                        settings.training.clip_norm,
+                        error_if_nonfinite=True,
+                    )
+                    optimizer.step()
+                    optimizer.zero_grad(set_to_none=True)
+                    step += 1
+                    accumulated = 0
+                    microbatches = 0
+                feedback.batch(
+                    start // batch_size + 1, loss_sum / seen, step,
                 )
-                optimizer.step()
-                optimizer.zero_grad(set_to_none=True)
-                step += 1
-                accumulated = 0
-                microbatches = 0
         report = None
         improved = False
         if not final:
+            feedback.show(f"Epoch {epoch + 1}: validating…", force=True)
             report = evaluate_model(model, store, settings.training.forecast_days)
             score = report["neural"]["global"]["wape"]
             if score is None:
@@ -183,6 +203,7 @@ def train(settings, artifact, model_kind="full", output=None, resume=None, final
             "best_epoch": best_epoch,
             "stale": stale,
         }
+        feedback.show(f"Epoch {epoch + 1}: saving checkpoints…", force=True)
         save_checkpoint(
             output / "latest.pt", model, store, settings, optimizer, **progress
         )
@@ -203,17 +224,26 @@ def train(settings, artifact, model_kind="full", output=None, resume=None, final
             }
         )
         write_json(history_path, history)
-        print(
-            f"Epoch {epoch + 1}: MAE={loss_sum / seen:.6g}, WAPE={best if not final else 'not evaluated'}",
-            flush=True,
+        validation = (
+            f"WAPE={score:.4%} | best={best:.4%} (epoch {best_epoch}) | "
+            f"patience={stale}/{settings.training.patience}"
+            if not final else "final refit"
+        )
+        feedback.message(
+            f"Epoch {epoch + 1}/{settings.training.epochs} complete | "
+            f"MAE={loss_sum / seen:.6g} | {validation} | "
+            f"{history[-1]['seconds']:.1f}s | "
+            f"{'new best saved; ' if improved else ''}latest.pt saved"
         )
         if not final and stale >= settings.training.patience:
+            feedback.message(f"Early stopping: no improvement for {stale} epochs.")
             break
     result = output / ("final.pt" if final else "best.pt")
     if not result.exists():
         raise ValueError(
             "no completed epochs/checkpoint; check resume epoch and output directory"
         )
+    feedback.message(f"Training complete. Checkpoint: {result}")
     return result
 
 

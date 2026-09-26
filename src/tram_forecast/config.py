@@ -20,6 +20,14 @@ class Config:
     shared1: tuple = ((24, 3, 1), (24, 5, 2), (16, 3, 12))
     shared2: tuple = ((12, 3, 1), (12, 5, 2), (8, 3, 12))
     shared3: tuple = ((6, 3, 1), (6, 5, 2), (4, 3, 6))
+    hourly_stride: int = 1
+    history_days: int = 21
+    event_depth: int = 2
+    shared_depth: int = 3
+    event_pool: str = "max"
+    temporal_pool: str = "max"
+    pooled_hours: int | None = None
+    head_width: int = 250
     max_hours: int = 32
     max_positions: int = 32768
     checkpoint_events: bool = True
@@ -32,7 +40,7 @@ class Config:
             if len(values) != 5 or any(type(v) is not int or v < 1 for v in values):
                 raise ValueError(f"{name} must contain five positive integers")
             object.__setattr__(self, name, values)
-        for name, width in [
+        for name, _ in [
             ("event1", 32),
             ("event2", 32),
             ("hourly", 32),
@@ -50,17 +58,23 @@ class Config:
                 raise ValueError(
                     f"{name}: paths require positive widths/dilations and odd kernels"
                 )
-            if sum(p[0] for p in paths) != width:
-                raise ValueError(f"{name}: total channel width must be {width}")
-            if (
-                len({p[1] for p in paths}) < 2
-                or len({p[2] for p in paths}) < 2
-                or not any(p[2] == 1 for p in paths)
-            ):
-                raise ValueError(
-                    f"{name}: require different kernels and dilations and an undilated path"
-                )
             object.__setattr__(self, name, paths)
+        for name in ("history_days", "head_width", "hourly_stride"):
+            if type(getattr(self, name)) is not int or getattr(self, name) < 1:
+                raise ValueError(f"{name} must be a positive integer")
+        if type(self.event_depth) is not int or self.event_depth not in (1, 2):
+            raise ValueError("event_depth must be 1 or 2")
+        if type(self.shared_depth) is not int or self.shared_depth not in (1, 2, 3):
+            raise ValueError("shared_depth must be 1, 2 or 3")
+        if self.event_pool not in ("max", "avg") or self.temporal_pool not in ("max", "avg"):
+            raise ValueError("pooling must be max or avg")
+        length = (self.history_days * 24 + self.hourly_stride - 1) // self.hourly_stride
+        for factor in (2, 2, 3)[:self.shared_depth]:
+            length //= factor
+        if length < 1 or (self.pooled_hours is not None and (
+            type(self.pooled_hours) is not int or not 1 <= self.pooled_hours <= length
+        )):
+            raise ValueError("pooled_hours must fit the downsampled history")
         if (
             type(self.max_hours) is not int
             or self.max_hours < 1
@@ -75,7 +89,7 @@ class Config:
     def halo(self):
         return sum(
             max((k - 1) * d // 2 for _, k, d in paths)
-            for paths in (self.event1, self.event2)
+            for paths in (self.event1, self.event2)[:self.event_depth]
         )
 
     def to_dict(self):

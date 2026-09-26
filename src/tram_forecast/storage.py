@@ -80,11 +80,13 @@ class Store:
         }
         self.contract_hash = digest(self.contract)
 
-    def history(self, route, cutoff, include_events=True):
+    def history(self, route, cutoff, include_events=True, history_days=21):
+        if type(history_days) is not int or history_days < 1:
+            raise ValueError("history_days must be a positive integer")
         if route not in self.route_index:
             raise ValueError("unsupported route")
         stop = (cutoff - self.start).days * 24
-        begin = stop - 504
+        begin = stop - history_days * 24
         if begin < 0 or stop > self.counts.shape[1]:
             raise ValueError("history outside fitting artifact")
         r = self.route_index[route]

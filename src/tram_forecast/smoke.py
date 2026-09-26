@@ -28,9 +28,9 @@ def smoke(settings, artifact, model_kind="full"):
     candidates = []
     for r, route in enumerate(store.routes):
         prefix = np.concatenate(([0], np.cumsum(counts[r], dtype=np.int64)))
-        for day in range(21, (store.end - store.start).days + 1):
+        for day in range(settings.model.history_days, (store.end - store.start).days + 1):
             stop = day * 24
-            candidates.append((int(prefix[stop] - prefix[stop - 504]), route, day))
+            candidates.append((int(prefix[stop] - prefix[stop - settings.model.history_days * 24]), route, day))
     candidates.sort()
     if not candidates:
         raise ValueError("no complete histories for smoke check")
@@ -40,7 +40,8 @@ def smoke(settings, artifact, model_kind="full"):
     ):
         cutoff = store.start + timedelta(days=day)
         sample = history_sample(
-            store, SampleIdentity(route, cutoff, cutoff), model_kind == "full"
+            store, SampleIdentity(route, cutoff, cutoff), model_kind == "full",
+            settings.model.history_days
         )
         days = settings.training.forecast_days
         sample["lead"] = np.arange(1, days + 1, dtype=np.float32)

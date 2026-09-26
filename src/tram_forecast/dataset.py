@@ -7,16 +7,22 @@ import numpy as np
 from .schema import SampleIdentity
 
 
-def sample_index(routes, start, end, forecast_days=7):
+def sample_index(routes, start, end, forecast_days=7, history_days=21):
     validate_horizon(forecast_days)
+    validate_history(history_days)
     if end <= start:
         raise ValueError("end must follow start")
     return tuple(
         SampleIdentity(r, start + timedelta(days=c), start + timedelta(days=c + h - 1))
         for r in routes
-        for c in range(21, (end - start).days)
+        for c in range(history_days, (end - start).days)
         for h in range(1, min(forecast_days, (end - start).days - c) + 1)
     )
+
+
+def validate_history(days):
+    if type(days) is not int or days < 1:
+        raise ValueError("history_days must be a positive integer")
 
 
 def validate_horizon(days):
@@ -33,13 +39,22 @@ def epoch_order(size, epoch, seed=67):
 class ForecastDataset:
     """Context-indexed histories; partial horizons never cross the fitting boundary."""
 
-    def __init__(self, artifact, model_kind="full", forecast_days=7):
+    def __init__(
+        self, artifact, model_kind="full", forecast_days=7, history_days=21,
+        context_start_days=None,
+    ):
         from .storage import Store
 
         if model_kind not in ("full", "boarding_only"):
             raise ValueError("unknown model kind")
         self.model_kind = model_kind
         validate_horizon(forecast_days)
+        validate_history(history_days)
+        first_context = history_days if context_start_days is None else context_start_days
+        validate_history(first_context)
+        if first_context < history_days:
+            raise ValueError("context_start_days cannot be shorter than history_days")
+        self.history_days = history_days
         self.forecast_days = forecast_days
         self.store = Store(artifact, events=model_kind == "full")
         # One identity per route/cutoff, regardless of the number of requested days.
@@ -47,7 +62,7 @@ class ForecastDataset:
             [
                 (r, c)
                 for r in self.store.routes
-                for c in range(21, (self.store.end - self.store.start).days)
+                for c in range(first_context, (self.store.end - self.store.start).days)
             ],
             dtype=np.int32,
         ).reshape(-1, 2)
@@ -61,7 +76,7 @@ class ForecastDataset:
         route, c = map(int, self.index[index])
         cutoff = self.store.start + timedelta(days=c)
         identity = SampleIdentity(route, cutoff, cutoff)
-        result = history_sample(self.store, identity, self.model_kind == "full")
+        result = history_sample(self.store, identity, self.model_kind == "full", self.history_days)
         days = min(self.forecast_days, (self.store.end - cutoff).days)
         requested = [cutoff + timedelta(days=h) for h in range(days)]
         result["lead"] = np.arange(1, days + 1, dtype=np.float32)
@@ -70,7 +85,7 @@ class ForecastDataset:
         return result
 
 
-def history_sample(store, identity, include_events=True):
+def history_sample(store, identity, include_events=True, history_days=21):
     from datetime import datetime, time
 
     from .config import ROUTES
@@ -78,12 +93,12 @@ def history_sample(store, identity, include_events=True):
 
     if not 1 <= identity.lead <= 61:
         raise ValueError("requested lead outside 1..61")
-    counts, hours = store.history(identity.route, identity.cutoff, include_events)
-    first = datetime.combine(identity.cutoff, time.min) - timedelta(hours=504)
+    counts, hours = store.history(identity.route, identity.cutoff, include_events, history_days)
+    first = datetime.combine(identity.cutoff, time.min) - timedelta(days=history_days)
     return {
         "identity": identity,
         "counts": counts[None, :],
-        "calendar": calendar(first + timedelta(hours=i) for i in range(504)),
+        "calendar": calendar(first + timedelta(hours=i) for i in range(history_days * 24)),
         "hours": hours,
         "route_index": ROUTES.index(identity.route) + 1,
         "request_calendar": request_calendar([identity.requested])[0],
