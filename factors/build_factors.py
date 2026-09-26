@@ -155,8 +155,8 @@ def build():
     labels["time"] = pd.to_datetime(labels.date) + pd.to_timedelta(labels.hour, unit="h")
     boardings = labels.set_index(["route", "time"]).boardings
 
-    fact = weather(WEATHER / "fact_open_meteo_era5.csv", WEATHER_COLUMNS)
-    forecast = weather(WEATHER / "forecast_ecmwf_day1.csv", ["temperature_c", "precipitation_mm"], "forecast_")
+    fact = weather(WEATHER / "fact_open_meteo_era5.csv.gz", WEATHER_COLUMNS)
+    forecast = weather(WEATHER / "forecast_ecmwf_day1.csv.gz", ["temperature_c", "precipitation_mm"], "forecast_")
     hourly, daily = city_factors()
     lines = route_lines()
 

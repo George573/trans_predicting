@@ -26,8 +26,8 @@
 | `route, date, hour` | маршрут, дата, час | |
 | `boardings` | посадки; с 1 ноября пусто, это прогнозный период | `dataset/labels` |
 | `day_off` | выходной по производственному календарю 2025 (1 ноября - рабочая суббота, 3-4 ноября и 31 декабря - выходные) | [производственный календарь, постановление № 1335](https://www.consultant.ru/law/ref/calendar/proizvodstvennye/2025/) |
-| `temperature_c, precipitation_mm, wind_speed_ms, cloud_cover_pct, humidity_pct` | фактическая погода ERA5 в ближайшей к маршруту точке: Балчуг или ВДНХ | `../weather/data/fact_open_meteo_era5.csv` |
-| `forecast_temperature_c, forecast_precipitation_mm` | прогноз ECMWF, выпущенный примерно за сутки | `../weather/data/forecast_ecmwf_day1.csv` |
+| `temperature_c, precipitation_mm, wind_speed_ms, cloud_cover_pct, humidity_pct` | фактическая погода ERA5 в ближайшей к маршруту точке: Балчуг или ВДНХ | `../weather/data/fact_open_meteo_era5.csv.gz` |
+| `forecast_temperature_c, forecast_precipitation_mm` | прогноз ECMWF, выпущенный примерно за сутки | `../weather/data/forecast_ecmwf_day1.csv.gz` |
 | `yandex_score` | балл Яндекс Пробок в этот час (есть в 2% часов) | `../traffic/data/congestion_yandex_wayback.csv` |
 | `codd_score` | максимальный балл ЦОДД за день (41% дней) | `../traffic/data/congestion_telegram.csv` |
 | `mo_vehicles` | машин на дорогах МО утром, по будням | там же |

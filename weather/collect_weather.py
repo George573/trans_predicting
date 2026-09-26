@@ -9,11 +9,15 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from http.cookiejar import CookieJar
 from pathlib import Path
 
-YEAR = 2025
+START = date(2024, 1, 1)
+END = date(2026, 12, 31)
+FACT_END = min(END, date.today())
+AHEAD_DAYS = 16
+HIRES_END = min(END, date.today() + timedelta(days=15))
 MSK = timedelta(hours=3)
 OUT = Path(__file__).parent / "data"
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
@@ -26,6 +30,7 @@ OPEN_METEO_VARS = [
     "temperature_2m", "relative_humidity_2m", "precipitation", "pressure_msl",
     "wind_speed_10m", "wind_direction_10m", "cloud_cover",
 ]
+HIRES_VARS = OPEN_METEO_VARS + ["snowfall", "snow_depth", "weather_code", "apparent_temperature"]
 FORECAST_MODELS = {"ecmwf_ifs025": "ecmwf", "icon_seamless": "icon", "gfs_seamless": "gfs"}
 METEOSTAT_MODEL_SOURCES = {"dwd_mosmix", "metno_forecast"}
 
@@ -103,45 +108,125 @@ def number(value):
 
 def write_csv(name, rows, columns=COLUMNS):
     OUT.mkdir(exist_ok=True)
-    with open(OUT / name, "w", newline="", encoding="utf-8") as file:
+    open_file = gzip.open if name.endswith(".gz") else open
+    with open_file(OUT / name, "wt", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
         writer.writerow(columns)
         writer.writerows(rows)
     print(f"  {name}: {len(rows)} строк")
 
 
-def in_year(moment):
-    return moment.year == YEAR
+def in_range(moment):
+    return START <= moment.date() <= END
+
+
+def spans():
+    """Календарные годы диапазона, обрезанные по START и FACT_END."""
+    for year in range(START.year, FACT_END.year + 1):
+        first, last = max(START, date(year, 1, 1)), min(FACT_END, date(year, 12, 31))
+        if first <= last:
+            yield first.isoformat(), last.isoformat()
 
 
 def open_meteo_era5():
     rows = []
     for name, lat, lon, *_ in STATIONS:
-        hourly = fetch_json(
-            "https://archive-api.open-meteo.com/v1/archive",
-            latitude=lat, longitude=lon, start_date=f"{YEAR}-01-01", end_date=f"{YEAR}-12-31",
-            hourly=",".join(OPEN_METEO_VARS), models="era5", timezone="Europe/Moscow", wind_speed_unit="ms",
-        )["hourly"]
-        for i, moment in enumerate(hourly["time"]):
-            rows.append([name, lat, lon, moment, *(hourly[v][i] for v in OPEN_METEO_VARS)])
-    write_csv("fact_open_meteo_era5.csv", rows)
+        print(f"  {name}")
+        for first, last in spans():
+            hourly = fetch_json(
+                "https://archive-api.open-meteo.com/v1/archive",
+                latitude=lat, longitude=lon, start_date=first, end_date=last,
+                hourly=",".join(OPEN_METEO_VARS), models="era5", timezone="Europe/Moscow", wind_speed_unit="ms",
+            )["hourly"]
+            for i, moment in enumerate(hourly["time"]):
+                rows.append([name, lat, lon, moment, *(hourly[v][i] for v in OPEN_METEO_VARS)])
+    write_csv("fact_open_meteo_era5.csv.gz", rows)
 
 
 def open_meteo_forecasts():
     rows = {model: [] for model in FORECAST_MODELS}
     for name, lat, lon, *_ in STATIONS:
-        hourly = fetch_json(
-            "https://previous-runs-api.open-meteo.com/v1/forecast",
-            latitude=lat, longitude=lon, start_date=f"{YEAR}-01-01", end_date=f"{YEAR}-12-31",
-            hourly=",".join(f"{v}_previous_day1" for v in OPEN_METEO_VARS), models=",".join(FORECAST_MODELS),
-            timezone="Europe/Moscow", wind_speed_unit="ms",
-        )["hourly"]
-        for model in FORECAST_MODELS:
-            for i, moment in enumerate(hourly["time"]):
-                values = [hourly[f"{v}_previous_day1_{model}"][i] for v in OPEN_METEO_VARS]
-                rows[model].append([name, lat, lon, moment, *values])
+        print(f"  {name}")
+        for first, last in spans():
+            hourly = fetch_json(
+                "https://previous-runs-api.open-meteo.com/v1/forecast",
+                latitude=lat, longitude=lon, start_date=first, end_date=last,
+                hourly=",".join(f"{v}_previous_day1" for v in OPEN_METEO_VARS), models=",".join(FORECAST_MODELS),
+                timezone="Europe/Moscow", wind_speed_unit="ms",
+            )["hourly"]
+            for model in FORECAST_MODELS:
+                for i, moment in enumerate(hourly["time"]):
+                    values = [hourly[f"{v}_previous_day1_{model}"][i] for v in OPEN_METEO_VARS]
+                    rows[model].append([name, lat, lon, moment, *values])
     for model, short in FORECAST_MODELS.items():
-        write_csv(f"forecast_{short}_day1.csv", rows[model])
+        write_csv(f"forecast_{short}_day1.csv.gz", rows[model])
+
+
+def open_meteo_hires():
+    """Historical Forecast API: архив лучшей доступной модели, 2-9 км, без отставания."""
+    rows = []
+    for name, lat, lon, *_ in STATIONS:
+        print(f"  {name}")
+        hourly = fetch_json(
+            "https://historical-forecast-api.open-meteo.com/v1/forecast",
+            latitude=lat, longitude=lon, start_date=START.isoformat(), end_date=HIRES_END.isoformat(),
+            hourly=",".join(HIRES_VARS), timezone="Europe/Moscow", wind_speed_unit="ms",
+        )["hourly"]
+        for i, moment in enumerate(hourly["time"]):
+            depth = hourly["snow_depth"][i]
+            rows.append([
+                name, lat, lon, moment, *(hourly[v][i] for v in OPEN_METEO_VARS),
+                hourly["snowfall"][i], None if depth is None else round(depth * 100, 1),
+                hourly["weather_code"][i], hourly["apparent_temperature"][i],
+            ])
+    write_csv("fact_open_meteo_hires.csv.gz", rows,
+              COLUMNS + ["snowfall_cm", "snow_depth_cm", "weather_code", "apparent_temperature_c"])
+
+
+def open_meteo_ahead():
+    """Прогноз на 16 суток вперёд: единственный источник на период после FACT_END."""
+    issued = date.today().isoformat()
+    rows = []
+    for name, lat, lon, *_ in STATIONS:
+        hourly = fetch_json(
+            "https://api.open-meteo.com/v1/forecast",
+            latitude=lat, longitude=lon, forecast_days=AHEAD_DAYS,
+            hourly=",".join(OPEN_METEO_VARS), timezone="Europe/Moscow", wind_speed_unit="ms",
+        )["hourly"]
+        for i, moment in enumerate(hourly["time"]):
+            rows.append([name, lat, lon, moment, *(hourly[v][i] for v in OPEN_METEO_VARS), issued])
+    write_csv("forecast_open_meteo_ahead.csv", rows, COLUMNS + ["issued_date"])
+
+
+def quantile(values, share):
+    ordered = sorted(values)
+    return ordered[min(len(ordered) - 1, int(share * (len(ordered) - 1) + 0.5))]
+
+
+def open_meteo_seasonal():
+    """Сезонный ансамбль ECMWF: единственный источник на остаток 2026 года и дальше."""
+    issued = date.today().isoformat()
+    variables = {"temperature_2m_max": "temp_max_c", "temperature_2m_min": "temp_min_c", "precipitation_sum": "precipitation_mm"}
+    rows = []
+    for name, lat, lon, *_ in STATIONS:
+        daily = fetch_json(
+            "https://seasonal-api.open-meteo.com/v1/seasonal",
+            latitude=lat, longitude=lon, daily=",".join(variables), timezone="Europe/Moscow", forecast_days=210,
+        )["daily"]
+        members = {v: [key for key in daily if key.startswith(f"{v}_member")] for v in variables}
+        for i, moment in enumerate(daily["time"]):
+            values = {v: [daily[key][i] for key in keys if daily[key][i] is not None] for v, keys in members.items()}
+            if not all(values.values()):
+                continue
+            stats = []
+            for v in variables:
+                got = values[v]
+                stats += [round(sum(got) / len(got), 2), quantile(got, 0.1), quantile(got, 0.9)]
+            rows.append([name, lat, lon, moment, *stats, len(values["temperature_2m_max"]), issued])
+    columns = ["location", "lat", "lon", "date"]
+    for short in variables.values():
+        columns += [short, f"{short}_p10", f"{short}_p90"]
+    write_csv("forecast_seasonal_daily.csv", rows, columns + ["members", "issued_date"])
 
 
 def meteostat():
@@ -149,7 +234,7 @@ def meteostat():
     for name, lat, lon, _, station in STATIONS:
         if not station:
             continue
-        for year in (YEAR - 1, YEAR):
+        for year in range(START.year - 1, FACT_END.year + 1):
             try:
                 raw = gzip.decompress(fetch(f"https://data.meteostat.net/hourly/{year}/{station}.csv.gz"))
             except urllib.error.HTTPError as error:
@@ -157,7 +242,7 @@ def meteostat():
                 continue
             for r in csv.DictReader(io.StringIO(raw.decode())):
                 moment = datetime(int(r["year"]), int(r["month"]), int(r["day"]), int(r["hour"])) + MSK
-                if not in_year(moment):
+                if not in_range(moment):
                     continue
                 temp, rhum, prcp, pres, wspd, wdir, cldc, snwd = (
                     meteostat_observed(r, key) for key in ("temp", "rhum", "prcp", "pres", "wspd", "wdir", "cldc", "snwd")
@@ -168,7 +253,7 @@ def meteostat():
                 ]
                 if any(value is not None for value in values):
                     rows.append([name, lat, lon, moment.isoformat(timespec="minutes"), *values, r.get("temp_source") if temp is not None else None])
-    write_csv("fact_meteostat.csv", rows, COLUMNS + ["snow_depth_cm", "temp_source"])
+    write_csv("fact_meteostat.csv.gz", rows, COLUMNS + ["snow_depth_cm", "temp_source"])
 
 
 def meteostat_observed(row, key):
@@ -179,21 +264,23 @@ def nasa_power():
     parameters = ["T2M", "RH2M", "PRECTOTCORR", "WS10M", "WD10M", "PS"]
     rows = []
     for name, lat, lon, *_ in STATIONS:
+        print(f"  {name}")
         data = fetch_json(
             "https://power.larc.nasa.gov/api/temporal/hourly/point",
             parameters=",".join(parameters), community="RE", latitude=lat, longitude=lon,
-            start=f"{YEAR - 1}1231", end=f"{YEAR}1231", format="JSON", **{"time-standard": "UTC"},
+            start=(START - timedelta(days=1)).strftime("%Y%m%d"), end=FACT_END.strftime("%Y%m%d"),
+            format="JSON", **{"time-standard": "UTC"},
         )["properties"]["parameter"]
         for key in data["T2M"]:
             moment = datetime.strptime(key, "%Y%m%d%H") + MSK
-            if not in_year(moment):
+            if not in_range(moment):
                 continue
             t, rh, prcp, ws, wd, ps = (number(data[p][key]) for p in parameters)
             rows.append([
                 name, lat, lon, moment.isoformat(timespec="minutes"),
                 t, rh, prcp, None, ws, wd, None, round(ps * 10, 1) if ps is not None else None,
             ])
-    write_csv("fact_nasa_power.csv", rows, COLUMNS + ["surface_pressure_hpa"])
+    write_csv("fact_nasa_power.csv.gz", rows, COLUMNS + ["surface_pressure_hpa"])
 
 
 def rp5_value(text):
@@ -215,7 +302,7 @@ def rp5():
         answer = fetch(
             "https://rp5.ru/responses/reFileSynop.php",
             data={
-                "wmo_id": wmo, "a_date1": f"01.01.{YEAR}", "a_date2": f"31.12.{YEAR}",
+                "wmo_id": wmo, "a_date1": START.strftime("%d.%m.%Y"), "a_date2": FACT_END.strftime("%d.%m.%Y"),
                 "f_ed3": 1, "f_ed4": 1, "f_ed5": 1, "f_pe": 1, "f_pe1": 2, "lng_id": 2, "type": "csv",
             },
             headers={"Referer": "https://rp5.ru/", "X-Requested-With": "XMLHttpRequest"},
@@ -238,7 +325,7 @@ def rp5():
                 rp5_value(r["tR"]), rp5_value(r["sss"]), r["WW"].strip(),
             ])
     rows.sort(key=lambda row: (row[0], row[3]))
-    write_csv("fact_rp5_synop.csv", rows, COLUMNS + ["precipitation_period_h", "snow_depth_cm", "weather"])
+    write_csv("fact_rp5_synop.csv.gz", rows, COLUMNS + ["precipitation_period_h", "snow_depth_cm", "weather"])
 
 
 def gismeteo_rows(name, slug):
@@ -255,11 +342,12 @@ def gismeteo_rows(name, slug):
     }
     months = 12 * len(years)
     broken = {key: len(values) for key, values in series.items() if len(values) != months}
-    if broken or YEAR not in years:
+    wanted = [year for year in years if START.year <= year <= END.year]
+    if broken or not wanted:
         raise ValueError(f"Gismeteo {name}: годы {years}, ожидалось {months} значений, получено {broken}")
-    start = 12 * years.index(YEAR)
     return [
-        [name, f"{YEAR}-{month + 1:02d}", *(values[start + month] for values in series.values())]
+        [name, f"{year}-{month + 1:02d}", *(values[12 * years.index(year) + month] for values in series.values())]
+        for year in wanted
         for month in range(12)
     ]
 
@@ -274,7 +362,10 @@ def gismeteo():
 
 SOURCES = {
     "era5": open_meteo_era5,
+    "hires": open_meteo_hires,
     "forecasts": open_meteo_forecasts,
+    "ahead": open_meteo_ahead,
+    "seasonal": open_meteo_seasonal,
     "meteostat": meteostat,
     "nasa": nasa_power,
     "rp5": rp5,
