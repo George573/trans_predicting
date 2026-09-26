@@ -175,8 +175,10 @@ python -m tram_forecast refit --selected-checkpoint outputs/runs/validation/full
 python -m tram_forecast predict --checkpoint outputs/runs/final/full/final.pt --artifact outputs/prepared/final --template outputs/template_7days.csv --output outputs/forecast_7days.csv
 ```
 
-Refit rebuilds mappings/scaling for January–October and starts fresh weights for
-the selected epoch count and forecast horizon. Forecasting reuses each route's
+Refit rebuilds mappings/scaling for January–October and starts fresh weights.
+By default it uses the best validation epoch; pass `--epochs N` to use a chosen
+count, such as the total completed validation epochs before early stopping.
+Forecasting reuses each route's
 October 11–31 encoding for all requested days. For the default seven-day run,
 create `outputs/template_7days.csv` by filtering the supplied template to
 November 1–7. It must contain all ten routes and 24 hours (1,680 unique keys),

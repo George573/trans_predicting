@@ -37,6 +37,11 @@ def build_parser():
             p.add_argument("--checkpoint", required=True)
         if name == "refit":
             p.add_argument("--selected-checkpoint", required=True)
+            p.add_argument(
+                "--epochs",
+                type=int,
+                help="final-fit epochs (defaults to the best validation epoch)",
+            )
         if name == "predict":
             p.add_argument("--template", required=True)
         if name == "compare":
@@ -127,6 +132,7 @@ def main(argv=None):
                         args.output,
                         args.device,
                         args.resume,
+                        args.epochs,
                     )
                 )
             }

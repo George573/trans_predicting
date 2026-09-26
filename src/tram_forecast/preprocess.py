@@ -126,10 +126,12 @@ def _build(settings, identity, fingerprint, stage, temp_root):
                     selected_columns
                 ).issubset(header):
                     raise ValueError(f"{path}: missing or duplicate event columns")
+                # Source CSVs mix LF and CRLF rows; DuckDB's strict mode rejects
+                # that mix during dialect detection, even when the fields are valid.
                 connection.execute(
                     "CREATE OR REPLACE TEMP TABLE input AS SELECT row_number() OVER () AS source_row, "
                     + ",".join(selected_columns)
-                    + " FROM read_csv(?, delim=';', header=true, all_varchar=true, parallel=false, nullstr='', strict_mode=true)",
+                    + " FROM read_csv(?, delim=';', quote='\"', escape='\"', header=true, all_varchar=true, parallel=false, nullstr='', strict_mode=false)",
                     [str(path)],
                 )
                 names = {

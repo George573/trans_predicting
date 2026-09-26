@@ -217,16 +217,17 @@ def train(settings, artifact, model_kind="full", output=None, resume=None, final
     return result
 
 
-def refit(selected_checkpoint, artifact, output=None, device=None, resume=None):
+def refit(selected_checkpoint, artifact, output=None, device=None, resume=None, epochs=None):
     payload = read_checkpoint(selected_checkpoint)
     if (
         payload["artifact_contract"]["end"]
         != payload["settings"]["data"]["validation_cutoff"]
     ):
         raise ValueError("refit requires a validation-selected checkpoint")
-    epochs = payload["progress"].get("best_epoch", 0)
-    if epochs < 1:
-        raise ValueError("checkpoint has no selected validation epoch")
+    selected_epoch = payload["progress"].get("best_epoch", 0)
+    epochs = selected_epoch if epochs is None else epochs
+    if type(epochs) is not int or epochs < 1:
+        raise ValueError("refit epochs must be a positive integer")
     settings = Settings.from_dict(payload["settings"])
     training = replace(
         settings.training, epochs=epochs, device=device or settings.training.device

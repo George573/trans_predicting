@@ -51,6 +51,15 @@ def test_final_vocab_sees_new_observations(prepared):
         final.evaluation_targets()
 
 
+def test_preparation_accepts_mixed_csv_line_endings(prepared, tmp_path):
+    settings, _ = prepared
+    raw = Path(settings.data.raw_paths[0])
+    lines = raw.read_bytes().splitlines()
+    raw.write_bytes(b"\n".join(lines[:2]) + b"\n" + b"\r\n".join(lines[2:]) + b"\r\n")
+    mixed = Store(prepare(settings, "validation", tmp_path / "mixed"))
+    assert len(mixed.events) == 3
+
+
 def test_zero_event_artifact_and_failed_preparation_cleanup(prepared, tmp_path):
     settings, _ = prepared
     raw = Path(settings.data.raw_paths[0])

@@ -34,10 +34,10 @@ class ForecastNetwork(nn.Module):
         )
         self.route = nn.Embedding(10, 8)
         self.head = nn.Sequential(
-            nn.Linear(685, 128),
+            nn.Linear(685, 250),
             nn.GELU(),
             nn.Dropout(self.config.dropout),
-            nn.Linear(128, 24),
+            nn.Linear(250, 24),
         )
         nn.init.constant_(self.head[-1].bias, math.log(math.expm1(1)))
         total = sum(p.numel() for p in self.parameters())
