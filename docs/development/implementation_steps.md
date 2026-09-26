@@ -1,3 +1,7 @@
+> Historical implementation record for the original two-stream model.
+> The current boarding-only architecture is documented in [the manifest](../architecture/architecture_manifest.md).
+> Event processing and its associated implementation steps have been retired.
+
 # Implementation steps
 
 Follow `docs/architecture/architecture_implementation_plan.md` v1.2 for all architecture, data, training, and CLI details. This checklist divides that specification into bounded tasks; it does not change its defaults. Execute steps in order. Consult the progress tracker for current status.

@@ -10,7 +10,6 @@ from tram_forecast.schema import (
     count_scale,
     label_grid,
     parse_route,
-    read_events,
     request_calendar,
 )
 
@@ -22,9 +21,9 @@ def test_config_roundtrip_and_rejects_single_path(tmp_path):
     path.write_text(json.dumps(Config().to_dict()))
     assert Config.load(path).fingerprint == Config().fingerprint
     with pytest.raises(ValueError):
-        Config(event1=((32, 3, 1),))
+        Config(hourly=((32, 3, 1),))
     with pytest.raises(ValueError):
-        Config(max_positions=12)
+        Config(history_days=0)
 
 
 def test_sample_boundaries_and_shuffle():
@@ -56,14 +55,7 @@ def test_labels_calendar_and_heldout_scale(tmp_path):
         label_grid([p], [1], date(2025, 1, 1), date(2025, 1, 2))
 
 
-def test_event_parser_and_ties(tmp_path):
-    p = tmp_path / "raw.csv"
-    p.write_text(
-        "ngpt_route;tran_date_time;validation_result;tran_type_id;good_type;place_id;pass_route\n1 трамвай;2025-01-01 01:00:00;1;52;A;1;\n1;2025-01-01 00:00:00;1;52;A;1;0\n1;2025-01-01 00:00:00;1;52;A;1;nan\n"
-    )
-    rows = sorted(read_events(p))
-    assert [r[3] for r in rows] == [3, 4, 2]
-    assert [r[4][-1] for r in rows] == ["0", "nan", None]
+def test_route_parser():
     assert parse_route(" 25 трамвай ") == 25
     with pytest.raises(ValueError):
         parse_route("25 bus")

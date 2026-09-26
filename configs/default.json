@@ -1,54 +1,5 @@
 {
   "model": {
-    "embedding_dims": [
-      4,
-      4,
-      8,
-      4,
-      8
-    ],
-    "category_caps": [
-      32,
-      128,
-      512,
-      32,
-      8192
-    ],
-    "min_frequency": 5,
-    "event1": [
-      [
-        12,
-        3,
-        1
-      ],
-      [
-        12,
-        5,
-        1
-      ],
-      [
-        8,
-        3,
-        2
-      ]
-    ],
-    "event2": [
-      [
-        12,
-        3,
-        1
-      ],
-      [
-        12,
-        5,
-        2
-      ],
-      [
-        8,
-        3,
-        4
-      ]
-    ],
     "hourly": [
       [
         12,
@@ -117,17 +68,10 @@
         6
       ]
     ],
-    "max_hours": 32,
-    "max_positions": 32768,
-    "checkpoint_events": true,
     "dropout": 0.1,
     "seed": 67
   },
   "data": {
-    "raw_paths": [
-      "dataset/train.csv",
-      "dataset/test.csv"
-    ],
     "label_paths": [
       "dataset/labels/labels_day_train.csv",
       "dataset/labels/labels_day_test.csv"
@@ -148,10 +92,6 @@
     "final_cutoff": "2025-11-01",
     "forecast_end": "2026-01-01",
     "output_root": "outputs/prepared",
-    "temp_dir": "outputs/tmp",
-    "memory_limit": "2GB",
-    "threads": 2,
-    "fetch_rows": 10000,
     "min_free_disk_bytes": 1000000000
   },
   "training": {

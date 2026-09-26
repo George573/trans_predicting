@@ -23,7 +23,7 @@ from .progress import TrainingProgress
 from .settings import Settings
 
 
-def train(settings, artifact, model_kind="full", output=None, resume=None, final=False):
+def train(settings, artifact, model_kind="boarding_only", output=None, resume=None, final=False):
     seed_all(settings.model.seed)
     dataset = ForecastDataset(
         artifact, model_kind, settings.training.forecast_days,
@@ -40,7 +40,6 @@ def train(settings, artifact, model_kind="full", output=None, resume=None, final
         available = (date.fromisoformat(store.metadata["evaluation_end"]) - store.end).days
         if settings.training.forecast_days > available:
             raise ValueError("forecast_days exceeds available validation days")
-    preparation = store.metadata["identity"]
     expected_end = (
         settings.data.final_cutoff if final else settings.data.validation_cutoff
     )
@@ -50,10 +49,6 @@ def train(settings, artifact, model_kind="full", output=None, resume=None, final
         or store.routes != settings.data.routes
     ):
         raise ValueError("training artifact dates/routes disagree with configuration")
-    if preparation["min_frequency"] != settings.model.min_frequency or list(
-        preparation["category_caps"]
-    ) != list(settings.model.category_caps):
-        raise ValueError("configuration disagrees with fitted vocabularies")
     output = Path(
         output
         or (Path(resume).resolve().parent if resume else None)
@@ -69,7 +64,6 @@ def train(settings, artifact, model_kind="full", output=None, resume=None, final
     ):
         raise ValueError("run already exists; use --resume or a new output directory")
     model = ForecastNetwork(
-        store.metadata["vocab_sizes"],
         store.metadata["scale"],
         settings.model,
         model_kind,
@@ -265,7 +259,7 @@ def refit(selected_checkpoint, artifact, output=None, device=None, resume=None, 
     settings = replace(settings, training=training)
     from .storage import Store
 
-    store = Store(artifact, events=False)
+    store = Store(artifact)
     if (
         str(store.end) != settings.data.final_cutoff
         or str(store.start) != settings.data.start

@@ -70,7 +70,7 @@ def predict(checkpoint, artifact, template, output, device="cpu"):
     from .checkpoint import read_checkpoint
 
     payload = read_checkpoint(checkpoint)
-    store = Store(artifact, events=payload["model_kind"] == "full")
+    store = Store(artifact)
     if (
         store.metadata["regime"] != "final"
         or store.end != date(2025, 11, 1)

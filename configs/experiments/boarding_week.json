@@ -1,45 +1,6 @@
 {
   "base": {
     "model": {
-      "embedding_dims": [
-        2,
-        2,
-        4,
-        2,
-        4
-      ],
-      "category_caps": [
-        32,
-        128,
-        512,
-        32,
-        8192
-      ],
-      "min_frequency": 5,
-      "event1": [
-        [
-          4,
-          3,
-          1
-        ],
-        [
-          4,
-          5,
-          2
-        ]
-      ],
-      "event2": [
-        [
-          4,
-          3,
-          1
-        ],
-        [
-          4,
-          5,
-          2
-        ]
-      ],
       "hourly": [
         [
           4,
@@ -88,24 +49,15 @@
           2
         ]
       ],
-      "max_hours": 256,
-      "max_positions": 262144,
-      "checkpoint_events": false,
       "dropout": 0.1,
       "seed": 67,
       "history_days": 7,
-      "event_depth": 2,
       "shared_depth": 2,
-      "event_pool": "max",
       "temporal_pool": "max",
       "pooled_hours": 7,
       "head_width": 64
     },
     "data": {
-      "raw_paths": [
-        "dataset/train.csv",
-        "dataset/test.csv"
-      ],
       "label_paths": [
         "dataset/labels/labels_day_train.csv",
         "dataset/labels/labels_day_test.csv"
@@ -126,10 +78,6 @@
       "final_cutoff": "2025-11-01",
       "forecast_end": "2026-01-01",
       "output_root": "outputs/prepared",
-      "temp_dir": "outputs/tmp",
-      "memory_limit": "2GB",
-      "threads": 2,
-      "fetch_rows": 10000,
       "min_free_disk_bytes": 1000000000
     },
     "training": {
@@ -155,21 +103,9 @@
       "model": {}
     },
     {
-      "name": "avg_events",
-      "model": {
-        "event_pool": "avg"
-      }
-    },
-    {
       "name": "avg_temporal",
       "model": {
         "temporal_pool": "avg"
-      }
-    },
-    {
-      "name": "one_event_stage",
-      "model": {
-        "event_depth": 1
       }
     },
     {

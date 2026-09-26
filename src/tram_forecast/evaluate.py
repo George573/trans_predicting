@@ -67,7 +67,7 @@ def weekly_profile(store, days, history_days=21):
     historic = [store.end - timedelta(days=history_days) + timedelta(days=i)
                 for i in range(history_days)]
     for route in store.routes:
-        counts, _ = store.history(route, store.end, False, history_days)
+        counts = store.history(route, store.end, history_days)
         counts = counts.reshape(history_days, 24)
         output.append(
             np.stack(
@@ -91,7 +91,6 @@ def fixed_forecast(model, store, days=7):
         sample = history_sample(
             store,
             SampleIdentity(route, store.end, store.end),
-            model.model_kind == "full",
             model.config.history_days,
         )
         history, _, _ = collate_samples([sample], device)

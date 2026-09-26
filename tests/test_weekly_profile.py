@@ -10,11 +10,11 @@ class WeeklyStore:
     end = date(2025, 9, 1)
     routes = (1,)
 
-    def history(self, route, cutoff, include_events, history_days):
-        assert cutoff == self.end and not include_events
+    def history(self, route, cutoff, history_days):
+        assert cutoff == self.end
         # Three weeks with values 10, 20 and 30 respectively.
         counts = np.repeat([10., 20., 30.], 7 * 24)
-        return counts[-history_days * 24:], None
+        return counts[-history_days * 24:]
 
 
 def test_weekly_baselines_use_requested_history():

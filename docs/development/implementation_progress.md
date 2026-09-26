@@ -1,3 +1,7 @@
+> Historical implementation record for the original two-stream model.
+> The current boarding-only architecture is documented in [the manifest](../architecture/architecture_manifest.md).
+> Event processing and its associated implementation steps have been retired.
+
 # Implementation progress tracker
 
 Track execution of [implementation_steps.md](implementation_steps.md). Technical requirements remain in [architecture_implementation_plan.md](../architecture/architecture_implementation_plan.md).

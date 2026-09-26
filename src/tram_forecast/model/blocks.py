@@ -12,14 +12,11 @@ class MultiscaleConv1d(nn.Module):
             for c, k, d in paths
         )
 
-    def forward(self, x, mask=None):
-        if mask is not None:
-            x = x * mask
-        out = torch.cat(
+    def forward(self, x):
+        return torch.cat(
             [
                 torch.nn.functional.gelu(path(x), approximate="none")
                 for path in self.paths
             ],
             dim=1,
         )
-        return out if mask is None else out * mask

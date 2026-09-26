@@ -40,12 +40,12 @@ class ForecastDataset:
     """Context-indexed histories; partial horizons never cross the fitting boundary."""
 
     def __init__(
-        self, artifact, model_kind="full", forecast_days=7, history_days=21,
+        self, artifact, model_kind="boarding_only", forecast_days=7, history_days=21,
         context_start_days=None,
     ):
         from .storage import Store
 
-        if model_kind not in ("full", "boarding_only"):
+        if model_kind != "boarding_only":
             raise ValueError("unknown model kind")
         self.model_kind = model_kind
         validate_horizon(forecast_days)
@@ -56,7 +56,7 @@ class ForecastDataset:
             raise ValueError("context_start_days cannot be shorter than history_days")
         self.history_days = history_days
         self.forecast_days = forecast_days
-        self.store = Store(artifact, events=model_kind == "full")
+        self.store = Store(artifact)
         # One identity per route/cutoff, regardless of the number of requested days.
         self.index = np.asarray(
             [
@@ -76,7 +76,7 @@ class ForecastDataset:
         route, c = map(int, self.index[index])
         cutoff = self.store.start + timedelta(days=c)
         identity = SampleIdentity(route, cutoff, cutoff)
-        result = history_sample(self.store, identity, self.model_kind == "full", self.history_days)
+        result = history_sample(self.store, identity, self.history_days)
         days = min(self.forecast_days, (self.store.end - cutoff).days)
         requested = [cutoff + timedelta(days=h) for h in range(days)]
         result["lead"] = np.arange(1, days + 1, dtype=np.float32)
@@ -85,7 +85,7 @@ class ForecastDataset:
         return result
 
 
-def history_sample(store, identity, include_events=True, history_days=21):
+def history_sample(store, identity, history_days=21):
     from datetime import datetime, time
 
     from .config import ROUTES
@@ -93,13 +93,12 @@ def history_sample(store, identity, include_events=True, history_days=21):
 
     if not 1 <= identity.lead <= 61:
         raise ValueError("requested lead outside 1..61")
-    counts, hours = store.history(identity.route, identity.cutoff, include_events, history_days)
+    counts = store.history(identity.route, identity.cutoff, history_days)
     first = datetime.combine(identity.cutoff, time.min) - timedelta(days=history_days)
     return {
         "identity": identity,
         "counts": counts[None, :],
         "calendar": calendar(first + timedelta(hours=i) for i in range(history_days * 24)),
-        "hours": hours,
         "route_index": ROUTES.index(identity.route) + 1,
         "request_calendar": request_calendar([identity.requested])[0],
         "lead": identity.lead,
@@ -120,13 +119,6 @@ def collate_samples(samples, device="cpu"):
             np.stack([s["calendar"] for s in samples]), device=device
         ),
     }
-    event_flags = [s["hours"] is not None for s in samples]
-    if any(event_flags) and not all(event_flags):
-        raise ValueError("mixed event/boarding-only batch")
-    if all(event_flags):
-        history["hours"] = [
-            torch.from_numpy(hour) for s in samples for hour in s["hours"]
-        ]
     request = {
         "context_indices": torch.tensor(
             [i for i, s in enumerate(samples) for _ in np.atleast_1d(s["lead"])],

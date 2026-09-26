@@ -3,6 +3,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import numpy as np
+import pytest
 import torch
 import torch.nn.functional as F
 
@@ -15,17 +16,25 @@ from tram_forecast.schema import request_calendar
 from tram_forecast.storage import Store
 
 
-def test_exported_head_matches_torch_forecast(prepared, tmp_path):
+@pytest.mark.parametrize("version", [1, 2])
+def test_exported_head_matches_torch_forecast(prepared, tmp_path, version):
     settings, path = prepared
-    store = Store(path, events=False)
+    store = Store(path)
     torch.manual_seed(0)
     model = ForecastNetwork(
-        store.metadata["vocab_sizes"],
         store.metadata["scale"],
         settings.model,
         "boarding_only",
     ).eval()
     save_checkpoint(tmp_path / "model.pt", model, store, settings, epoch=1)
+    if version == 1:
+        checkpoint = tmp_path / "model.pt"
+        payload = torch.load(checkpoint, weights_only=True)
+        payload["version"] = 1
+        payload["settings"]["model"].update(event_depth=2, checkpoint_events=True)
+        payload["settings"]["data"]["raw_paths"] = ["missing-events.csv"]
+        payload["vocab_sizes"] = [3] * 5
+        torch.save(payload, checkpoint)
     labels = tmp_path / "labels.csv"
     labels.write_text(
         Path(settings.data.label_paths[0]).read_text()

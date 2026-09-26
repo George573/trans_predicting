@@ -15,19 +15,18 @@ from .schema import SampleIdentity, request_calendar
 from .storage import Store
 
 
-def smoke(settings, artifact, model_kind="full"):
+def smoke(settings, artifact, model_kind="boarding_only"):
     seed_all(settings.model.seed)
-    store = Store(artifact, events=model_kind == "full")
+    store = Store(artifact)
     model = ForecastNetwork(
-        store.metadata["vocab_sizes"],
         store.metadata["scale"],
         settings.model,
         model_kind,
     ).to(settings.training.device)
-    counts = store.offsets[:, :, 1] - store.offsets[:, :, 0]
+    counts = store.counts
     candidates = []
     for r, route in enumerate(store.routes):
-        prefix = np.concatenate(([0], np.cumsum(counts[r], dtype=np.int64)))
+        prefix = np.concatenate(([0], np.cumsum(counts[r], dtype=np.float64)))
         for day in range(settings.model.history_days, (store.end - store.start).days + 1):
             stop = day * 24
             candidates.append((int(prefix[stop] - prefix[stop - settings.model.history_days * 24]), route, day))
@@ -40,7 +39,7 @@ def smoke(settings, artifact, model_kind="full"):
     ):
         cutoff = store.start + timedelta(days=day)
         sample = history_sample(
-            store, SampleIdentity(route, cutoff, cutoff), model_kind == "full",
+            store, SampleIdentity(route, cutoff, cutoff),
             settings.model.history_days
         )
         days = settings.training.forecast_days

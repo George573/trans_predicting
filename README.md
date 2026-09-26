@@ -2,9 +2,9 @@
 
 A PyTorch package that encodes 21 days of observed route history once and predicts
 24 hourly boarding counts for each requested future day. The initial horizon is
-seven days for both neural models and the weekly-profile baseline. Every convolutional stage uses parallel
-kernel lengths and dilations. The full model combines raw events and boarding
-history; a boarding-only model and weekly-profile baseline are also provided.
+seven days for the neural model and the weekly-profile baseline. Every convolutional stage uses parallel
+kernel lengths and dilations. The model uses boarding history and calendar features, with route and forecast-lead
+conditioning. A weekly-profile baseline is also provided.
 
 ## Repository layout
 
@@ -29,7 +29,7 @@ history; a boarding-only model and weekly-profile baseline are also provided.
 
 ## Install and verify
 
-Python 3.10+; verified locally with Python 3.14, PyTorch 2.14.0+cpu and DuckDB 1.5.5.
+Python 3.10+; verified locally with Python 3.14, PyTorch 2.14.0+cpu.
 
 ```bash
 python -m venv .venv
@@ -78,8 +78,8 @@ Install notebook dependencies into the same environment as the training package:
 
 In VS Code, select `.venv/bin/python` as the notebook kernel. The configuration
 cell controls model kind, forecast horizon, device, batch size, accumulation,
-epochs, output directory and resume checkpoint. The default is boarding-only
-with a seven-day horizon; CUDA is selected when available. Run cells in order
+epochs, output directory and resume checkpoint. The notebook uses boarding-only inputs and currently selects a 61-day horizon;
+the CLI defaults to seven days. CUDA is selected when available. Run cells in order
 to prepare data, inspect the weekly baseline, check memory, train, and plot
 learning curves and forecasts. The Train cell performs actual optimization. Training shows a live `tqdm` batch progress
 bar with running MAE, optimizer steps, speed and epoch ETA, followed by
@@ -92,8 +92,8 @@ continue the same run. The notebook is saved without outputs or trained weights.
 
 ## Prepare data
 
-Expected local files: `dataset/train.csv`, `dataset/test.csv`,
-`dataset/labels/labels_day_train.csv`, `dataset/labels/labels_day_test.csv`.
+Required local files: `dataset/labels/labels_day_train.csv` and
+`dataset/labels/labels_day_test.csv`. Raw transaction CSVs are not required.
 Configure alternative paths in `configs/default.json`.
 
 ```bash
@@ -101,39 +101,32 @@ python -m tram_forecast prepare --config configs/default.json --regime validatio
 python -m tram_forecast inspect --artifact outputs/prepared/validation
 ```
 
-Preparation assigns events by timestamp, validates input schemas, fits capped
-vocabularies on January–August only, sorts events on disk, and atomically publishes
-memory-mapped arrays. Validation labels are separate from history storage. File
-path/size/mtime and preprocessing settings identify reusable artifacts. A changed
-source or incompatible configuration requires a new artifact directory, supplied
-with `--artifact PATH`. These fingerprints are compatibility checks, not content
-hashes. Do not modify artifacts after publication.
+Preparation validates hourly boarding labels, fits count scaling on the fitting
+period only, and atomically publishes memory-mapped count arrays. Validation
+labels remain separate from history storage. Path/size/mtime and preprocessing
+settings identify reusable artifacts; these are compatibility checks, not content
+hashes. Changed sources require a new artifact directory (`--artifact PATH`).
 
-DuckDB memory, threads, temporary directory, fetch batch size and minimum free
-space are configurable. The free-space check is a threshold, not a guarantee
-that a large sort will fit. Preparation reports progress by input file and basic
-coverage/reconciliation diagnostics. It does not run the optional full profiler.
+The boarding-only artifact format is version 2. Rebuild old event-based artifacts
+in a new directory, for example `--artifact outputs/prepared/validation_boardings`,
+and pass that directory to training/evaluation. Existing artifacts are not modified.
 
 ## Resource smoke check
 
 ```bash
-python -m tram_forecast smoke --artifact outputs/prepared/validation --model full --output outputs/smoke.json
+python -m tram_forecast smoke --artifact outputs/prepared/validation --model boarding_only --output outputs/smoke.json
 ```
 
 This explicitly requested command checks typical and busiest histories with a
 forward/backward pass and no optimizer step. It reports CPU process high-water
 RSS and CUDA peaks where available. It tests batch size one; larger training
-batches still require checking. If an OOM occurs, lower the event chunk budget or
-batch size and rerun. No automatic truncation or architecture changes occur.
+batches still require checking. If an OOM occurs, lower batch size and rerun. Histories have fixed length.
 
 ## Training and evaluation
 
 ```bash
 python -m tram_forecast train --artifact outputs/prepared/validation --model boarding_only
-python -m tram_forecast train --artifact outputs/prepared/validation --model full
 python -m tram_forecast evaluate --checkpoint outputs/runs/validation/boarding_only/best.pt --artifact outputs/prepared/validation --output outputs/boarding_metrics.json
-python -m tram_forecast evaluate --checkpoint outputs/runs/validation/full/best.pt --artifact outputs/prepared/validation --output outputs/full_metrics.json
-python -m tram_forecast compare --reports outputs/boarding_metrics.json outputs/full_metrics.json --output outputs/comparison.json
 ```
 
 Training defaults to original-unit MAE, AdamW, one context per batch with
@@ -156,21 +149,23 @@ reports with different horizons. The evaluation period must cover the requested
 horizon. Lead conditioning retains `(lead-1)/60`, so expansion does not change
 network geometry or parameter count.
 
-Checkpoints include model, optimizer, settings, fitted vocabulary/scaling contract,
+Checkpoints include model, optimizer, settings, boarding artifact/scaling contract,
 RNG state and epoch progress. Resume from the latest checkpoint in the same run
 directory; only changing the epoch limit or the configured output root
 is accepted without a fresh run:
 
 ```bash
-python -m tram_forecast train --artifact outputs/prepared/validation --model full --resume outputs/runs/validation/full/latest.pt
+python -m tram_forecast train --artifact outputs/prepared/validation --model boarding_only --resume outputs/runs/validation/boarding_only/latest.pt
 ```
 
 Epoch-boundary resume is supported. An interrupted partial epoch is rerun. Keep
 `best.pt`, `latest.pt` and `history.json` together. A fresh run refuses to overwrite
 an existing checkpoint directory; use `--output NEW_DIRECTORY`.
-Checkpoints from the earlier individual-request training layout remain loadable
-for inference with their original 61-day horizon, but cannot resume grouped-context
-training.
+New checkpoints use format version 2. Existing boarding-only version-1 weights
+remain usable for `export-head` and fresh `refit`; event settings are discarded
+when reading them. Their old artifact contracts cannot resume or evaluate against
+new artifacts. Full/event-stream checkpoints are rejected. No checkpoint files
+are rewritten automatically.
 
 ## Final refit and forecast
 
@@ -178,11 +173,11 @@ After choosing a validation model, execute these commands explicitly:
 
 ```bash
 python -m tram_forecast prepare --regime final
-python -m tram_forecast refit --selected-checkpoint outputs/runs/validation/full/best.pt --artifact outputs/prepared/final
-python -m tram_forecast predict --checkpoint outputs/runs/final/full/final.pt --artifact outputs/prepared/final --template outputs/template_7days.csv --output outputs/forecast_7days.csv
+python -m tram_forecast refit --selected-checkpoint outputs/runs/validation/boarding_only/best.pt --artifact outputs/prepared/final
+python -m tram_forecast predict --checkpoint outputs/runs/final/boarding_only/final.pt --artifact outputs/prepared/final --template outputs/template_7days.csv --output outputs/forecast_7days.csv
 ```
 
-Refit rebuilds mappings/scaling for January–October and starts fresh weights.
+Refit rebuilds scaling for January–October and starts fresh weights.
 By default it uses the best validation epoch; pass `--epochs N` to use a chosen
 count, such as the total completed validation epochs before early stopping.
 Forecasting reuses each route's
@@ -200,40 +195,29 @@ November–December hidden labels are never used.
 
 ## Model API
 
-`ForecastNetwork` receives original-unit `counts [B,1,504]`, historical
-`calendar [B,6,504]`, and (full model only) `hours`: `B*504` chronological int64
-`[events,5]` tensors. Here B counts contexts, not requested days. Empty hours use
-`[0,5]`. Ragged IDs may remain on CPU; floating inputs/request tensors must share
-the model device. For R total requested days, request fields are
-`context_indices [R]`, `route_indices [R]`, `calendar [R,4]`, `lead [R]`.
-Context indices select from the B encoded histories. Outputs and flattened targets
-are `[R,24]` in original boarding units. `ForecastDataset(..., forecast_days=7)`
-and `collate_samples` build these grouped inputs. Omitting `context_indices`
-preserves the one-request-per-context API.
+`ForecastNetwork(scale, config=None)` receives original-unit
+`counts [B,1,T]` and historical `calendar [B,6,T]`, where
+`T = history_days * 24` (504 by default). Calendar inputs retain hour, weekday and
+day-of-month sine/cosine features. There is no event-list input.
 
-Learned event vectors are not cached during training. Inference uses
-`encode_history` once per route/cutoff and `predict_day` for each requested day.
-The default full network has 215,324 nonembedding parameters and at most 285,888
-including capped embeddings.
+For R requested days, request fields are `context_indices [R]`,
+`route_indices [R]`, `calendar [R,4]`, and `lead [R]`. Outputs and targets are
+`[R,24]` in original boarding units. Histories are encoded once per context;
+`predict_day` reuses them. Omitting `context_indices` keeps one request per context.
+The default model has **195,868 parameters**, including the route embedding.
 
-Raw excerpts, the exploratory notebook and old PDFs remain local under ignored
-paths (`samples/`, `experiments/references/`). Source datasets were not deleted.
+`boarding_only` remains the model identifier in run paths, checkpoints, experiment
+reports and the optional CLI `--model` argument. It is the only supported model.
 
 ## Scientific architecture PDF
-
-The five-page vector architecture note can be regenerated from the default model:
 
 ```bash
 .venv/bin/python -m pip install -e '.[docs]'
 .venv/bin/python tools/docs/build_architecture_pdf.py
 ```
 
-Output: `output/pdf/tram_cnn_scientific_architecture.pdf` (ignored generated artifact).
-The builder checks the full-model parameter ceiling and includes the source Git
-revision. It documents the full computation graph, every multiscale path, temporal
-support, exact event tiling, embeddings and the fixed-cutoff evaluation protocol.
-The user-supplied TFT visual reference is kept locally in
-`experiments/references/tft_diagram_reference.png`.
+Output: `output/pdf/tram_cnn_scientific_architecture.pdf`. The vector note describes
+the boarding-only graph, convolution paths, request conditioning and data contracts.
 
 ## Forecast service
 

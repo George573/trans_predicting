@@ -31,7 +31,7 @@ def build_parser():
         if name == "prepare":
             p.add_argument("--regime", choices=["validation", "final"], required=True)
         if name in ("train", "smoke"):
-            p.add_argument("--model", choices=["boarding_only", "full"], default="full")
+            p.add_argument("--model", choices=["boarding_only"], default="boarding_only")
         if name in ("train", "refit"):
             p.add_argument("--resume")
         if name in ("evaluate", "predict", "export-head"):
@@ -86,7 +86,7 @@ def main(argv=None):
         elif args.command == "inspect":
             from .storage import Store
 
-            result = Store(args.artifact, events=False).metadata
+            result = Store(args.artifact).metadata
         elif args.command == "smoke":
             from .smoke import smoke
 
@@ -105,7 +105,7 @@ def main(argv=None):
             from .storage import Store
 
             payload = read_checkpoint(args.checkpoint)
-            store = Store(args.artifact, events=payload["model_kind"] == "full")
+            store = Store(args.artifact)
             model, _ = load_model(args.checkpoint, store, args.device or "cpu")
             result = evaluate_model(
                 model, store, payload["settings"]["training"]["forecast_days"]

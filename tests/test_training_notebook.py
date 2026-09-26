@@ -20,7 +20,7 @@ def test_notebook_is_clean_and_code_compiles():
             compile("".join(cell["source"]), cell["id"], "exec")
 
 
-@pytest.mark.parametrize("kind", ["boarding_only", "full"])
+@pytest.mark.parametrize("kind", ["boarding_only"])
 def test_notebook_fixture_workflow(prepared, tmp_path, monkeypatch, kind):
     matplotlib = pytest.importorskip("matplotlib")
     pytest.importorskip("IPython")
@@ -39,9 +39,9 @@ def test_notebook_fixture_workflow(prepared, tmp_path, monkeypatch, kind):
 
     def fixture_train(settings, artifact, model_kind, output, resume):
         calls.append((model_kind, resume))
-        store = Store(artifact, events=model_kind == "full")
+        store = Store(artifact)
         model = ForecastNetwork(
-            store.metadata["vocab_sizes"], store.metadata["scale"],
+            store.metadata["scale"],
             settings.model, model_kind,
         )
         report = evaluate_model(model, store, settings.training.forecast_days)
@@ -63,6 +63,9 @@ def test_notebook_fixture_workflow(prepared, tmp_path, monkeypatch, kind):
     notebook = json.loads(NOTEBOOK.read_text())
     try:
         for cell in notebook["cells"]:
+            # Final refit/export is separately covered by execution and export tests.
+            if cell["id"] == "final-forecast":
+                break
             if cell["cell_type"] != "code":
                 continue
             exec(compile("".join(cell["source"]), cell["id"], "exec"), namespace)

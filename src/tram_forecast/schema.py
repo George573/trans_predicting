@@ -26,10 +26,6 @@ def parse_route(value):
     return int(match.group(1))
 
 
-def category(value):
-    return value.strip() or None
-
-
 def calendar(timestamps):
     """Return [6,T], including calendar information for empty hours."""
     t = list(timestamps)
@@ -92,29 +88,3 @@ def count_scale(counts):
     if counts.size == 0 or not np.isfinite(counts).all() or (counts < 0).any():
         raise ValueError("invalid count grid")
     return max(1.0, float(counts.mean(dtype=np.float64)))
-
-
-def read_events(path, file_index=0):
-    """Stream selected fields and deterministic sort keys without retaining identifiers."""
-    from .config import FIELDS
-
-    with open(path, encoding="utf-8-sig", newline="") as handle:
-        reader = csv.DictReader(handle, delimiter=";")
-        if not set(FIELDS + ("ngpt_route", "tran_date_time")).issubset(
-            reader.fieldnames or []
-        ):
-            raise ValueError(f"{path}: missing event columns")
-        for line, row in enumerate(reader, 2):
-            try:
-                timestamp = datetime.fromisoformat(row["tran_date_time"].strip())
-                if timestamp.tzinfo is not None:
-                    raise ValueError("expected naive dataset timestamp")
-                yield (
-                    parse_route(row["ngpt_route"]),
-                    timestamp,
-                    file_index,
-                    line,
-                    tuple(category(row[f]) for f in FIELDS),
-                )
-            except (ValueError, TypeError) as exc:
-                raise ValueError(f"{path}:{line}: {exc}") from exc

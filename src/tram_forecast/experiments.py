@@ -1,4 +1,4 @@
-"""Preview or run controlled full or boarding-only architecture comparisons."""
+"""Preview or run controlled boarding-only architecture comparisons."""
 
 import argparse
 import json
@@ -30,8 +30,6 @@ def variants(suite):
         names.add(name)
         for seed in seeds:
             model = replace(base.model, **variant.get("model", {}), seed=seed)
-            if model.category_caps != base.model.category_caps or model.min_frequency != base.model.min_frequency:
-                raise ValueError("suite variants must share fitted vocabularies")
             first_context = base.training.context_start_days
             if first_context is None and model.history_days != base.model.history_days:
                 raise ValueError("suite variants must share history length or set context_start_days")
@@ -50,12 +48,12 @@ def run_suite(
     """Train fresh runs; overwrite archives existing selected runs before restarting."""
     suite = json.loads(Path(suite_path).read_text())
     runs = variants(suite)
-    model_kind = suite.get("model_kind", "full")
-    if model_kind not in ("full", "boarding_only"):
-        raise ValueError("model_kind must be full or boarding_only")
+    model_kind = suite.get("model_kind", "boarding_only")
+    if model_kind != "boarding_only":
+        raise ValueError("model_kind must be boarding_only")
     if run and artifact is None:
         raise ValueError("--artifact is required with --run")
-    store = Store(artifact, events=model_kind == "full") if artifact else None
+    store = Store(artifact) if artifact else None
     output = Path(output)
     existing = [output / name for name, _ in runs
                 if (output / name).exists() or (output / name).is_symlink()]
@@ -84,23 +82,18 @@ def run_suite(
     for name, settings in runs:
         if device:
             settings = replace(settings, training=replace(settings.training, device=device))
-        vocab = store.metadata["vocab_sizes"] if store else [c + 3 for c in settings.model.category_caps]
-        model = ForecastNetwork(vocab, store.metadata["scale"] if store else 1, settings.model, model_kind)
+        model = ForecastNetwork(store.metadata["scale"] if store else 1, settings.model, model_kind)
         row = {"name": name, "model_kind": model_kind, "variant": name.rsplit("_seed", 1)[0],
                "seed": settings.model.seed, "parameters": model.parameter_report()["total"],
-               "parameter_basis": "artifact vocabulary" if store else "maximum vocabulary",
                "history_days": settings.model.history_days,
                "encoded_width": model.encoded_width,
                "mlp_input_width": model.encoded_width + 13,
-               "event_output_width": model.event_width,
-               "event_parameters": model.parameter_report()["events"],
                "forecast_days": settings.training.forecast_days,
                "settings": settings.to_dict()}
         del model
         print(
-            f"{name}: {row['parameters']:,} parameters ({row['parameter_basis']}) | "
-            f"history features={row['encoded_width']} | MLP input={row['mlp_input_width']} | "
-            f"event output={row['event_output_width']}", flush=True,
+            f"{name}: {row['parameters']:,} parameters | "
+            f"history features={row['encoded_width']} | MLP input={row['mlp_input_width']}", flush=True,
         )
         if run:
             directory = output / name
@@ -129,7 +122,7 @@ def run_suite(
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--suite", default="configs/experiments/full_week.json")
+    parser.add_argument("--suite", default="configs/experiments/boarding_week.json")
     parser.add_argument("--artifact")
     parser.add_argument("--output", default="outputs/architecture")
     parser.add_argument("--device")

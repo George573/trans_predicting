@@ -7,31 +7,23 @@ from torch import nn
 
 from ..config import Config
 from .blocks import MultiscaleConv1d
-from .events import EventEncoder
 
 
 class ForecastNetwork(nn.Module):
-    def __init__(self, vocab_sizes, scale, config=None, model_kind="full"):
+    def __init__(self, scale, config=None, model_kind="boarding_only"):
         super().__init__()
         self.config = config or Config()
-        if model_kind not in ("full", "boarding_only"):
+        if model_kind != "boarding_only":
             raise ValueError("unknown model kind")
         self.model_kind = model_kind
         if not math.isfinite(scale) or scale < 1:
             raise ValueError("scale must be finite and >=1")
         self.register_buffer("scale", torch.tensor(float(scale)))
         self.history_hours = self.config.history_days * 24
-        self.event_width = (
-            sum(p[0] for p in (self.config.event1, self.config.event2)[self.config.event_depth - 1])
-            if model_kind == "full" else 0
-        )
         hourly_width = sum(p[0] for p in self.config.hourly)
-        if model_kind == "full":
-            self.events = EventEncoder(vocab_sizes, self.config)
-            self.raw = MultiscaleConv1d(self.event_width + 6, self.config.hourly, self.config.hourly_stride)
         self.boarding = MultiscaleConv1d(7, self.config.hourly, self.config.hourly_stride)
         layers = []
-        channels = hourly_width * (2 if model_kind == "full" else 1)
+        channels = hourly_width
         length = (self.history_hours + self.config.hourly_stride - 1) // self.config.hourly_stride
         pool = nn.MaxPool1d if self.config.temporal_pool == "max" else nn.AvgPool1d
         stages = (self.config.shared1, self.config.shared2, self.config.shared3)
@@ -54,56 +46,14 @@ class ForecastNetwork(nn.Module):
         )
         nn.init.constant_(self.head[-1].bias, math.log(math.expm1(1)))
 
-    def encode_pooled_history(self, pooled, counts, calendar):
-        """Encode aligned event, count and calendar histories."""
-        b = counts.shape[0]
-        if (
-            counts.shape != (b, 1, self.history_hours)
-            or calendar.shape != (b, 6, self.history_hours)
-            or pooled.shape != (b, self.event_width, self.history_hours)
-        ):
-            raise ValueError(f"history must cover exactly {self.history_hours} aligned hours")
-        a = (
-            self.raw(torch.cat((pooled, calendar), dim=1))
-            if self.model_kind == "full"
-            else None
-        )
-        y = self.boarding(torch.cat((counts / self.scale, calendar), dim=1))
-        return self.shared(torch.cat((a, y), dim=1) if a is not None else y).flatten(1)
-
     def encode_history(self, history):
-        """Use ragged `hours` in flattened batch/hour order, or padded reference inputs."""
-        counts = history["counts"]
+        """Encode bounded boarding counts and aligned calendar features."""
+        counts, calendar = history["counts"], history["calendar"]
         b = counts.shape[0]
-        if self.model_kind == "boarding_only":
-            return self.encode_pooled_history(
-                counts.new_zeros((b, self.event_width, self.history_hours)), counts, history["calendar"]
-            )
-        if "hours" in history:
-            if len(history["hours"]) != b * self.history_hours:
-                raise ValueError(f"ragged history must contain exactly B*{self.history_hours} hours")
-            pooled = (
-                self.events.encode_hours(history["hours"])
-                .reshape(b, self.history_hours, self.event_width)
-                .transpose(1, 2)
-            )
-            return self.encode_pooled_history(pooled, counts, history["calendar"])
-        indices = history["hour_indices"]
-        if (
-            indices.ndim != 1
-            or indices.unique().numel() != indices.numel()
-            or (indices < 0).any()
-            or (indices >= b * self.history_hours).any()
-        ):
-            raise ValueError("hour indices must be unique and in range")
-        pooled = counts.new_zeros((b * self.history_hours, self.event_width))
-        if indices.numel():
-            encoded = self.events(history["event_ids"], history["lengths"])
-            if encoded.shape[0] != indices.numel():
-                raise ValueError("event/hour count mismatch")
-            pooled = pooled.index_copy(0, indices, encoded)
-        pooled = pooled.reshape(b, self.history_hours, self.event_width).transpose(1, 2)
-        return self.encode_pooled_history(pooled, counts, history["calendar"])
+        if counts.shape != (b, 1, self.history_hours) or calendar.shape != (b, 6, self.history_hours):
+            raise ValueError(f"history must cover exactly {self.history_hours} aligned hours")
+        y = self.boarding(torch.cat((counts / self.scale, calendar), dim=1))
+        return self.shared(y).flatten(1)
 
     def predict_day(self, encoded_history, route_indices, request_calendar, lead):
         b = encoded_history.shape[0]
@@ -154,7 +104,5 @@ class ForecastNetwork(nn.Module):
             name: sum(p.numel() for p in module.parameters())
             for name, module in self.named_children()
         }
-        report.setdefault("events", 0)
-        report.setdefault("raw", 0)
         report["total"] = sum(report.values())
         return report

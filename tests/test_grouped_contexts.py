@@ -45,7 +45,7 @@ def test_contexts_have_all_eligible_targets_and_one_history(prepared):
             )
     history, request, targets = collate_samples([dataset[0], dataset[-1]])
     assert history["counts"].shape == (2, 1, 504)
-    assert len(history["hours"]) == 2 * 504
+    assert set(history) == {"counts", "calendar"}
     assert targets.shape == (8, 24)
     assert request["context_indices"].tolist() == [0] * 7 + [1]
     assert request["lead"].tolist() == list(range(1, 8)) + [1]
@@ -54,14 +54,14 @@ def test_contexts_have_all_eligible_targets_and_one_history(prepared):
     assert longer[0]["target"].shape == (10, 24)
 
 
-@pytest.mark.parametrize("kind", ["full", "boarding_only"])
+@pytest.mark.parametrize("kind", ["boarding_only"])
 def test_grouped_predictions_and_gradients_match_individual_requests(prepared, kind):
     settings, artifact = prepared
     dataset = ForecastDataset(artifact, kind)
     history, request, target = collate_samples([dataset[0], dataset[-1]])
     store = dataset.store
     model = ForecastNetwork(
-        store.metadata["vocab_sizes"], store.metadata["scale"],
+        store.metadata["scale"],
         replace(settings.model, dropout=0), kind,
     ).train()
     reference = deepcopy(model)
@@ -75,8 +75,6 @@ def test_grouped_predictions_and_gradients_match_individual_requests(prepared, k
             "counts": history["counts"][context:context + 1],
             "calendar": history["calendar"][context:context + 1],
         }
-        if kind == "full":
-            single_history["hours"] = history["hours"][context * 504:(context + 1) * 504]
         single_request = {k: v[i:i + 1] for k, v in request.items() if k != "context_indices"}
         individual.append(reference(single_history, single_request))
     separate = torch.cat(individual)
@@ -99,8 +97,8 @@ def test_partial_horizons_accumulate_by_requested_day():
 
 def test_evaluation_ignores_targets_after_horizon(prepared):
     settings, artifact = prepared
-    store = Store(artifact, events=False)
-    model = ForecastNetwork(store.metadata["vocab_sizes"], store.metadata["scale"], settings.model, "boarding_only")
+    store = Store(artifact)
+    model = ForecastNetwork(store.metadata["scale"], settings.model, "boarding_only")
     before = evaluate_model(model, store)
     values = np.load(artifact / "evaluation.npy")
     values[:, 7 * 24:] = 9999
@@ -115,8 +113,8 @@ def test_evaluation_ignores_targets_after_horizon(prepared):
 def test_checkpoint_horizon_and_resume_contract(prepared, tmp_path, capsys, days):
     settings, artifact = prepared
     settings = replace(settings, training=replace(settings.training, forecast_days=days))
-    store = Store(artifact, events=False)
-    model = ForecastNetwork(store.metadata["vocab_sizes"], store.metadata["scale"], settings.model, "boarding_only")
+    store = Store(artifact)
+    model = ForecastNetwork(store.metadata["scale"], settings.model, "boarding_only")
     path = tmp_path / "run" / "latest.pt"
     save_checkpoint(path, model, store, settings)
     assert read_checkpoint(path)["settings"]["training"]["forecast_days"] == days

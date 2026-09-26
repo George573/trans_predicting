@@ -42,9 +42,8 @@ def test_aggregated_metrics_and_zero_denominator():
 
 def test_baseline_network_and_fixed_evaluation(prepared):
     settings, path = prepared
-    store = Store(path, events=False)
+    store = Store(path)
     model = ForecastNetwork(
-        store.metadata["vocab_sizes"],
         store.metadata["scale"],
         settings.model,
         "boarding_only",
@@ -73,7 +72,7 @@ def test_baseline_network_and_fixed_evaluation(prepared):
 
 def test_rng_checkpoint_and_contract(prepared, tmp_path):
     settings, path = prepared
-    store = Store(path, events=False)
+    store = Store(path)
     seed_all(67)
     state = rng_state()
     expected = (random.random(), np.random.random(), torch.rand(3))
@@ -81,7 +80,6 @@ def test_rng_checkpoint_and_contract(prepared, tmp_path):
     assert random.random() == expected[0] and np.random.random() == expected[1]
     torch.testing.assert_close(torch.rand(3), expected[2])
     model = ForecastNetwork(
-        store.metadata["vocab_sizes"],
         store.metadata["scale"],
         settings.model,
         "boarding_only",
@@ -105,7 +103,7 @@ def test_rng_checkpoint_and_contract(prepared, tmp_path):
     )
     final = prepare(settings, "final")
     with pytest.raises(ValueError, match="contract"):
-        load_model(checkpoint, Store(final, events=False))
+        load_model(checkpoint, Store(final))
     with patch(
         "tram_forecast.train.train", return_value=tmp_path / "final.pt"
     ) as train_call:
@@ -179,7 +177,7 @@ def test_training_control_flow_without_training(prepared, tmp_path):
             settings.training, batch_size=2, accumulation=2, epochs=4, patience=1
         ),
     )
-    store = Store(artifact, events=False)
+    store = Store(artifact)
     dataset = MagicMock()
     dataset.store = store
     dataset.__len__.return_value = 5
@@ -233,7 +231,53 @@ def test_smoke_is_backward_only(prepared):
     with patch(
         "torch.optim.AdamW.step", side_effect=AssertionError("must not optimize")
     ):
-        result = smoke(settings, path, "full")
+        result = smoke(settings, path, "boarding_only")
     assert result["optimizer_steps"] == 0
     assert [item["case"] for item in result["checks"]] == ["typical", "busiest"]
     assert all(item["process_peak_rss_bytes"] > 0 for item in result["checks"])
+
+
+def test_checkpoint_migration_and_event_model_rejection(prepared, tmp_path):
+    from tram_forecast.checkpoint import read_checkpoint
+    from tram_forecast.io import digest
+    from tram_forecast.settings import Settings
+
+    settings, artifact = prepared
+    store = Store(artifact)
+    model = ForecastNetwork(store.metadata['scale'], settings.model).eval()
+    checkpoint = tmp_path / 'legacy.pt'
+    save_checkpoint(checkpoint, model, store, settings, best_epoch=2)
+    payload = torch.load(checkpoint, weights_only=True)
+    assert payload['version'] == 2 and 'vocab_sizes' not in payload
+    # Simulate the previous boarding-only serialization contract.
+    payload['version'] = 1
+    payload['settings']['model'].update(event_depth=2, category_caps=[32, 128, 512, 32, 8192])
+    payload['settings']['data'].update(raw_paths=['missing-events.csv'], memory_limit='2GB')
+    payload['vocab_sizes'] = [3] * 5
+    payload['artifact_contract']['vocab'] = {'legacy': {}}
+    payload['artifact_hash'] = digest(payload['artifact_contract'])
+    torch.save(payload, checkpoint)
+    migrated = read_checkpoint(checkpoint)
+    assert Settings.from_dict(migrated['settings']) == settings
+    restored = ForecastNetwork(migrated['scale'], settings.model).eval()
+    restored.load_state_dict(migrated['model'])
+    np.testing.assert_array_equal(fixed_forecast(restored, store, 7), fixed_forecast(model, store, 7))
+    with pytest.raises(ValueError, match='contract mismatch'):
+        load_model(checkpoint, store)
+    final = prepare(settings, 'final')
+    with patch('tram_forecast.train.train', return_value=tmp_path / 'refit.pt') as call:
+        refit(checkpoint, final)
+    assert call.call_args.args[0].model == settings.model
+    payload['model_kind'] = 'full'
+    torch.save(payload, checkpoint)
+    with pytest.raises(ValueError, match='event-stream checkpoints'):
+        read_checkpoint(checkpoint)
+
+
+def test_cli_defaults_to_boardings_and_rejects_full():
+    parser = build_parser()
+    for command in ('train', 'smoke'):
+        args = parser.parse_args([command, '--artifact', 'unused'])
+        assert args.model == 'boarding_only'
+        with pytest.raises(SystemExit):
+            parser.parse_args([command, '--artifact', 'unused', '--model', 'full'])

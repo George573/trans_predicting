@@ -18,7 +18,6 @@ def export_head(checkpoint, labels, output):
     if payload["model_kind"] != "boarding_only":
         raise ValueError("the stand serves boarding-only checkpoints")
     model = ForecastNetwork(
-        payload["vocab_sizes"],
         payload["scale"],
         Settings.from_dict(payload["settings"]).model,
         payload["model_kind"],

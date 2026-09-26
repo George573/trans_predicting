@@ -1,7 +1,6 @@
-"""Small full-model histories, pooling, tiling and checkpoint contracts."""
+"""Small boarding histories, pooling and checkpoint contracts."""
 
 import json
-from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
 
@@ -13,49 +12,27 @@ from tram_forecast.dataset import ForecastDataset, collate_samples
 from tram_forecast.evaluate import fixed_forecast
 from tram_forecast.experiments import run_suite, variants
 from tram_forecast.model import ForecastNetwork
-from tram_forecast.model.events import EventEncoder
 from tram_forecast.settings import Settings
 
 
 def small():
-    return Settings.load('configs/full_week_small.json').model
-
-
-@pytest.mark.parametrize('pool', ['max', 'avg'])
-@pytest.mark.parametrize('depth', [1, 2])
-def test_event_tiling_matches_reference_and_gradients(pool, depth):
-    config = replace(small(), event_pool=pool, event_depth=depth, max_positions=28)
-    reference = EventEncoder([6] * 5, config)
-    tiled = deepcopy(reference)
-    hour = torch.randint(1, 6, (71, 5))
-    expected = reference(hour[None], torch.tensor([len(hour)]))
-    actual = tiled.encode_long_hour(hour)
-    torch.testing.assert_close(actual, expected)
-    expected.sum().backward()
-    actual.sum().backward()
-    for a, b in zip(reference.parameters(), tiled.parameters()):
-        torch.testing.assert_close(a.grad, b.grad, atol=1e-6, rtol=1e-4)
-    empty = reference(torch.zeros(1, 3, 5, dtype=torch.long), torch.tensor([0]))
-    assert torch.equal(empty, torch.zeros_like(empty))
-    padded = torch.zeros(1, 90, 5, dtype=torch.long)
-    padded[0, :71] = hour
-    torch.testing.assert_close(reference(padded, torch.tensor([71])), expected)
+    return Settings.load('configs/boarding_week_small.json').model
 
 
 @pytest.mark.parametrize('depth', [1, 2, 3])
 @pytest.mark.parametrize('pool', ['max', 'avg'])
-def test_week_history_full_forward_backward_checkpoint(prepared, tmp_path, depth, pool):
+def test_week_history_forward_backward_checkpoint(prepared, tmp_path, depth, pool):
     settings, artifact = prepared
-    config = replace(small(), min_frequency=1, shared_depth=depth, temporal_pool=pool)
+    config = replace(small(), shared_depth=depth, temporal_pool=pool)
     settings = replace(settings, model=config)
-    data = ForecastDataset(artifact, 'full', 7, history_days=7)
+    data = ForecastDataset(artifact, 'boarding_only', 7, history_days=7)
     assert data.index[0, 1] == 7
-    sample = data[14]  # Includes the fixture's nonempty event hour.
+    sample = data[14]  # Cutoff January 22.
     history, request, target = collate_samples([sample])
     assert history['counts'].shape == (1, 1, 168)
-    assert len(history['hours']) == 168
+    assert set(history) == {'counts', 'calendar'}
     assert sample['identity'].cutoff.isoformat() == '2025-01-22'
-    model = ForecastNetwork(data.store.metadata['vocab_sizes'], 1, config, 'full')
+    model = ForecastNetwork(1, config, 'boarding_only')
     prediction = model(history, request)
     assert prediction.shape == target.shape
     prediction.mean().backward()
@@ -69,33 +46,33 @@ def test_week_history_full_forward_backward_checkpoint(prepared, tmp_path, depth
 
 
 def test_suite_preview_and_default_checkpoint_geometry():
-    rows = run_suite('configs/experiments/full_week.json')
-    assert len(rows) == 10 and max(r['parameters'] for r in rows) < 50_000
+    rows = run_suite('configs/experiments/boarding_week.json')
+    assert len(rows) == 8 and max(r['parameters'] for r in rows) < 50_000
     assert all(r['history_days'] == 7 for r in rows)
-    model = ForecastNetwork([6] * 5, 1)
+    model = ForecastNetwork(1)
     assert model.head[0].weight.shape == (250, 685)
     assert model.encoded_width == 672
 
 
 @pytest.mark.parametrize('values', [dict(history_days=0), dict(shared_depth=4),
-    dict(event_depth=0), dict(event_pool='median'), dict(pooled_hours=99), dict(head_width=0)])
+    dict(temporal_pool='median'), dict(pooled_hours=99), dict(head_width=0)])
 def test_invalid_architectures(values):
     with pytest.raises(ValueError):
         replace(small(), **values)
 
 
 def test_suite_rejects_changed_contexts():
-    suite = json.loads(Path('configs/experiments/full_week.json').read_text())
+    suite = json.loads(Path('configs/experiments/boarding_week.json').read_text())
     suite['variants'][0]['model']['history_days'] = 21
     with pytest.raises(ValueError, match='share history'):
         variants(suite)
 
 
-@pytest.mark.parametrize("kind", ["full", "boarding_only"])
+@pytest.mark.parametrize("kind", ["boarding_only"])
 def test_suite_orchestration_without_optimization(prepared, tmp_path, monkeypatch, kind):
     settings, artifact = prepared
-    suite = {"base": replace(settings, model=replace(small(), min_frequency=1)).to_dict(),
-             "variants": [{"name": "baseline"}, {"name": "avg", "model": {"event_pool": "avg"}}]}
+    suite = {"base": replace(settings, model=small()).to_dict(),
+             "variants": [{"name": "baseline"}, {"name": "avg", "model": {"temporal_pool": "avg"}}]}
     suite["model_kind"] = kind
     path = tmp_path / "suite.json"
     path.write_text(json.dumps(suite))
@@ -104,8 +81,8 @@ def test_suite_orchestration_without_optimization(prepared, tmp_path, monkeypatc
     def fake_train(settings, artifact, model_kind, output):
         from tram_forecast.io import write_json
         from tram_forecast.storage import Store
-        store = Store(artifact, events=model_kind == "full")
-        model = ForecastNetwork(store.metadata["vocab_sizes"], 1, settings.model, model_kind)
+        store = Store(artifact)
+        model = ForecastNetwork(1, settings.model, model_kind)
         calls.append(model_kind)
         checkpoint = output / "best.pt"
         save_checkpoint(checkpoint, model, store, settings, best_epoch=1)
@@ -168,7 +145,7 @@ def test_quick_followup_uses_identical_training_targets(prepared):
     indices = []
     for _, settings in runs:
         assert settings.training.epochs == 5 and settings.training.patience == 2
-        data = ForecastDataset(artifact, 'full', 7, settings.model.history_days,
+        data = ForecastDataset(artifact, 'boarding_only', 7, settings.model.history_days,
                                settings.training.context_start_days)
         indices.append(data.index)
     for index in indices[1:]:
@@ -190,5 +167,5 @@ def test_boarding_notebook_setup_and_preview(tmp_path, monkeypatch):
                     namespace.update(OUTPUT=tmp_path / "runs", ARTIFACT=tmp_path / "missing")
                 exec(code, namespace)
     assert namespace["suite"]["model_kind"] == "boarding_only"
-    assert len(namespace["preview"]) == 4
+    assert len(namespace["preview"]) == len(namespace["suite"]["variants"])
     assert all(r["model_kind"] == "boarding_only" for r in namespace["preview"])
