@@ -22,10 +22,12 @@ def build_parser():
         ("compare", "Compare completed validation runs"),
         ("refit", "Fit selected model from scratch on final observations"),
         ("predict", "Write validated final submission"),
+        ("export-onnx", "Export a boarding-only checkpoint to ONNX graphs"),
+        ("serve", "Serve forecasts from exported ONNX graphs over HTTP"),
     ]:
         p = commands.add_parser(name, help=help_text)
         p.add_argument("--config", default="configs/default.json")
-        if name not in ("check-config", "compare"):
+        if name not in ("check-config", "compare", "export-onnx", "serve"):
             p.add_argument("--artifact", required=name != "prepare")
         if name == "prepare":
             p.add_argument("--regime", choices=["validation", "final"], required=True)
@@ -33,7 +35,7 @@ def build_parser():
             p.add_argument("--model", choices=["boarding_only", "full"], default="full")
         if name in ("train", "refit"):
             p.add_argument("--resume")
-        if name in ("evaluate", "predict"):
+        if name in ("evaluate", "predict", "export-onnx"):
             p.add_argument("--checkpoint", required=True)
         if name == "refit":
             p.add_argument("--selected-checkpoint", required=True)
@@ -46,8 +48,21 @@ def build_parser():
             p.add_argument("--template", required=True)
         if name == "compare":
             p.add_argument("--reports", nargs="+", required=True)
-        if name in ("smoke", "train", "evaluate", "compare", "refit", "predict"):
-            p.add_argument("--output", required=name == "predict")
+        if name == "serve":
+            p.add_argument("--model", required=True)
+            p.add_argument("--labels", nargs="+", required=True)
+            p.add_argument("--host", default="0.0.0.0")
+            p.add_argument("--port", type=int, default=8000)
+        if name in (
+            "smoke",
+            "train",
+            "evaluate",
+            "compare",
+            "refit",
+            "predict",
+            "export-onnx",
+        ):
+            p.add_argument("--output", required=name in ("predict", "export-onnx"))
         if name in ("smoke", "train", "evaluate", "refit", "predict"):
             p.add_argument("--device")
     return parser
@@ -136,6 +151,14 @@ def main(argv=None):
                     )
                 )
             }
+        elif args.command == "export-onnx":
+            from .onnx_export import export_onnx
+
+            result = {"model": str(export_onnx(args.checkpoint, args.output))}
+        elif args.command == "serve":
+            from .serve import serve
+
+            return serve(args.model, args.labels, args.host, args.port)
         else:
             from .predict import predict
 
