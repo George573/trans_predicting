@@ -22,10 +22,11 @@ def build_parser():
         ("compare", "Compare completed validation runs"),
         ("refit", "Fit selected model from scratch on final observations"),
         ("predict", "Write validated final submission"),
+        ("export-head", "Export a boarding-only checkpoint head for the Go stand"),
     ]:
         p = commands.add_parser(name, help=help_text)
         p.add_argument("--config", default="configs/default.json")
-        if name not in ("check-config", "compare"):
+        if name not in ("check-config", "compare", "export-head"):
             p.add_argument("--artifact", required=name != "prepare")
         if name == "prepare":
             p.add_argument("--regime", choices=["validation", "final"], required=True)
@@ -33,7 +34,7 @@ def build_parser():
             p.add_argument("--model", choices=["boarding_only", "full"], default="full")
         if name in ("train", "refit"):
             p.add_argument("--resume")
-        if name in ("evaluate", "predict"):
+        if name in ("evaluate", "predict", "export-head"):
             p.add_argument("--checkpoint", required=True)
         if name == "refit":
             p.add_argument("--selected-checkpoint", required=True)
@@ -46,8 +47,18 @@ def build_parser():
             p.add_argument("--template", required=True)
         if name == "compare":
             p.add_argument("--reports", nargs="+", required=True)
-        if name in ("smoke", "train", "evaluate", "compare", "refit", "predict"):
-            p.add_argument("--output", required=name == "predict")
+        if name == "export-head":
+            p.add_argument("--labels", nargs="+", required=True)
+        if name in (
+            "smoke",
+            "train",
+            "evaluate",
+            "compare",
+            "refit",
+            "predict",
+            "export-head",
+        ):
+            p.add_argument("--output", required=name in ("predict", "export-head"))
         if name in ("smoke", "train", "evaluate", "refit", "predict"):
             p.add_argument("--device")
     return parser
@@ -135,6 +146,12 @@ def main(argv=None):
                         args.epochs,
                     )
                 )
+            }
+        elif args.command == "export-head":
+            from .head_export import export_head
+
+            result = {
+                "head": str(export_head(args.checkpoint, args.labels, args.output))
             }
         else:
             from .predict import predict

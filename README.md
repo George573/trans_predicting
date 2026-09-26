@@ -20,6 +20,8 @@ history; a boarding-only model and weekly-profile baseline are also provided.
 | `tools/` | Optional standalone profiling tools; not required by the package |
 | `dataset/README.md` | Dataset rules; actual data remains local and ignored |
 | `outputs/` | Ignored preparation artifacts, checkpoints, metrics and submissions |
+| `bench/go-inference-stand/` | Go API and dispatcher UI that compute the CNN head in-process |
+| `Dockerfile`, `docker-compose.yml` | Stand image; the checkpoint head is exported for Go at build time |
 
 [Implementation specification](docs/architecture/architecture_implementation_plan.md)
 · [Steps](docs/development/implementation_steps.md)
@@ -233,96 +235,20 @@ support, exact event tiling, embeddings and the fixed-cutoff evaluation protocol
 The user-supplied TFT visual reference is kept locally in
 `experiments/references/tft_diagram_reference.png`.
 
-## Small full-model experiments
+## Forecast service
 
-Open [notebooks/architecture_experiments.ipynb](notebooks/architecture_experiments.ipynb)
-for editable settings, parameter previews, sequential training and a comparison table.
-The [small preset](configs/full_week_small.json) uses **7 days of input history**,
-7 forecast days, both event and boarding branches, 8-channel convolution stages,
-and a 64-unit head: at most **43,554 parameters** including embeddings.
-The notebook automatically selects CUDA when available and prints the GPU name.
-Small-model experiments default to batch size 64 with accumulation 1, event chunks
-of up to 256 hours / 262,144 padded event positions, and event checkpointing off.
-These are starting settings, not a measured VRAM fit: event density affects memory.
-Try batch size 128 if memory permits; reduce batch/chunk sizes if allocation fails.
-Batch size counts route/cutoff contexts, each containing 168 hours. Changing it
-changes the number of optimizer updates per epoch, so use the same batch settings
-across compared variants. CLI runs still require `--device cuda` to select the GPU.
-Existing prepared artifacts can be reused when vocabulary settings and dates match.
-
-The [experiment suite](configs/experiments/full_week.json) compares ten variants:
-baseline, average event pooling, average temporal pooling, one event stage,
-one/three shared stages, larger hourly kernels, no hourly dilation, a wider head,
-and more dropout. Each variant changes one setting relative to the small baseline.
-All runs share context length, forecast horizon, optimizer settings and seeds.
+A boarding-only checkpoint is served by one container: the Go API with the dispatcher
+UI, which computes the CNN head itself on every request. PyTorch runs only during the
+image build.
 
 ```bash
-# Preview only (no optimization or output files).
-python -m tram_forecast.experiments
-# Train all variants; use a fresh output directory or add --overwrite.
-python -m tram_forecast.experiments --artifact outputs/prepared/validation --output outputs/architecture/week_v1 --device cuda --run
-# Or smoke-check/train just the small baseline.
-python -m tram_forecast smoke --config configs/full_week_small.json --artifact outputs/prepared/validation --model full
-python -m tram_forecast train --config configs/full_week_small.json --artifact outputs/prepared/validation --model full --output outputs/runs/full_week
+docker compose up -d --build   # http://127.0.0.1:8090
 ```
 
-To restart in the same output directory, pass `overwrite=True` to `run_suite`
-(or `--overwrite --run` on the CLI). Previous selected run directories and
-`comparison.json` are moved to a unique timestamped folder under `OUTPUT/archive/`.
-Other files and unselected runs are kept. This starts training from scratch; it
-does not resume checkpoints. The notebook training cell enables this explicitly.
-Preview calls never archive anything.
-
-Each run saves its configuration, parameter count, epoch history and checkpoints.
-`comparison.json` ranks completed runs by validation WAPE and includes MAE,
-best epoch, completed epochs, training time and the weekly-profile baseline.
-The baseline retains its original 21-day history. Neural histories use only the
-configured number of days immediately before each cutoff; changing history length
-also changes the first eligible training cutoff. Hold history length fixed for
-architecture comparisons. The suite does not use hidden test labels.
-
-Model settings now include `history_days`, `event_depth` (1–2), `shared_depth`
-(1–3), `event_pool` / `temporal_pool` (`max` or `avg`), `pooled_hours` (optional
-adaptive temporal reduction), and `head_width`. Convolution paths in `event1`,
-`event2`, `hourly`, and `shared1`–`shared3` are `[channels, odd_kernel, dilation]`;
-channel totals are inferred. Each stage has at least two parallel paths.
-Temporal stages downsample by 2, 2, then 3. The preset uses equal shared-stage
-widths and seven adaptive output positions to hold head size fixed across depth
-variants. Average event pooling excludes padding and combines long-hour tiles
-by event count. Defaults preserve the existing 21-day, 250-unit-head architecture.
-
-Start with the ten-epoch screen, then rerun promising variants with a larger epoch
-budget and multiple `seeds`. Change `base.training.forecast_days` to 61 to compare
-on the competition horizon; do not compare scores across different horizons.
-
-
-The architecture notebook now defaults to `configs/experiments/quick_followup.json`:
-four runs (7/21-day history × one/two shared stages), seed 67, five epochs maximum,
-and patience two. Batch size remains 64. `training.context_start_days=21` keeps
-training cutoff dates and targets identical across histories. Results show both
-7- and 21-day weekly-profile baselines alongside neural scores. This is a quick
-screen, not a convergence or multi-seed study. The original ten-variant suite is
-still available in `configs/experiments/full_week.json`.
-
-
-For the same quick comparison using only boardings and calendar features, open
-[notebooks/boarding_only_experiments.ipynb](notebooks/boarding_only_experiments.ipynb).
-It uses `configs/experiments/boarding_only.json`, automatically selects CUDA when
-available, and writes separate results under `outputs/architecture/boarding_only_v1`.
-The four runs use batch size 64, five epochs maximum, patience two, and seed 67.
-Both weekly-profile baselines are shown in the table. The experiment runner reads
-`model_kind` from the suite (`full` by default); boarding-only runs skip event loading.
-
-`configs/experiments/boarding_capacity.json` adds nine boarding-only capacity
-experiments, from a 6,616-parameter reference to a 716,264-parameter model. History
-representations feeding the MLP range from 56 to 2,688 features (plus 13 route,
-calendar and lead features). Variants include four/six parallel hourly kernels,
-kernels up to 49, dilations up to 24, and hourly convolution strides 1/2/4.
-`hourly_stride` is shared by every hourly path so their outputs remain aligned;
-path triples remain `[channels, kernel, dilation]`. The stride comparisons retain
-identical channel counts, adaptive output sizes and MLP widths. Wider variants
-combine channel, representation and head changes; they are capacity comparisons.
-Boarding-only models have zero event-output channels and zero event parameters.
-The suite keeps seven-day history, one shared stage, batch 64, five epochs and
-patience two. Load it in the boarding notebook and use a new output directory;
-notebook configuration overrides the suite's training settings.
+The build expects `outputs/boarding_only_61days_v5_final/final.pt` (override with
+`--build-arg CHECKPOINT=...`) and `dataset/labels/labels_day_test.csv`, the source of the
+October 11-31 history. The Docker build runs `python -m tram_forecast export-head`, which
+encodes that history, folds it with the route embedding into the first head layer and
+writes `head.json` with the remaining weights and 27 reference days predicted by torch.
+The server refuses to start if its own output diverges from them. Set
+`STAND_AUTH=user:pass` to enable basic auth. Details: [bench/go-inference-stand/README.md](bench/go-inference-stand/README.md).
