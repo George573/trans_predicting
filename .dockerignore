@@ -3,5 +3,8 @@
 !artifacts/bundle
 !input/calendar/*.xml
 !web/geo/routes.geojson
+!dashboard
 service/lib
 service/bin
+dashboard/node_modules
+dashboard/dist
