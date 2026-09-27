@@ -1,0 +1,172 @@
+{
+  "shap": {
+    "rows": 13176,
+    "base_value": 821.7634772964133,
+    "mean_abs_by_feature": {
+      "hour": 265.21669192976157,
+      "route": 374.7324571395734,
+      "is_holiday": 0.5567230671208475,
+      "is_weekend": 143.12238143453774,
+      "is_short_working_day": 0.24450521667918773,
+      "season": 37.38364618861995,
+      "weekday": 13.466282802879656,
+      "hour_sin": 105.6001865443476,
+      "hour_cos": 287.0299414177161,
+      "weekday_sin": 44.7835145512619,
+      "weekday_cos": 6.364895458535918,
+      "day_of_month_sin": 1.5805162620770983,
+      "day_of_month_cos": 2.746805097154469,
+      "days_before_block": 4.541664046038851,
+      "days_after_block": 8.315551726115617,
+      "in_block": 1.1354577921398339
+    },
+    "mean_abs_by_group": {
+      "профиль суток": 577.2667152664112,
+      "маршрут": 374.7324571395734,
+      "день недели": 55.97227936825334,
+      "выходной и праздник": 143.67386013664012,
+      "праздничные блоки": 12.760622570470147,
+      "сезон": 37.38364618861995,
+      "день месяца": 3.6583689821153165
+    },
+    "check_max_abs_diff": 1.1823431123048067e-11
+  },
+  "rules_fold4": {
+    "cut": "2025-09-30",
+    "valid": "2025-10-01..2025-10-31",
+    "score_model": 0.90321,
+    "score_all_rules": 0.90211,
+    "delta_all_points": -0.11,
+    "rules": [
+      {
+        "id": "r21",
+        "name": "50: по выходным не работает",
+        "cells": 152,
+        "delta_points": 0.034,
+        "cells_wape_model": 1.344,
+        "cells_wape_rule": 0.981
+      },
+      {
+        "id": "r20",
+        "name": "7: по выходным укорочен",
+        "cells": 152,
+        "delta_points": -0.009,
+        "cells_wape_model": 0.142,
+        "cells_wape_rule": 0.149
+      },
+      {
+        "id": "r12",
+        "name": "12: по выходным объезд",
+        "cells": 152,
+        "delta_points": -0.133,
+        "cells_wape_model": 0.094,
+        "cells_wape_rule": 0.148
+      },
+      {
+        "id": "r19",
+        "name": "7 и 50: вечером укорочены",
+        "cells": 62,
+        "delta_points": -0.001,
+        "cells_wape_model": 0.202,
+        "cells_wape_rule": 0.208
+      }
+    ]
+  },
+  "rules_fold3": {
+    "cut": "2025-08-31",
+    "valid": "2025-09-01..2025-10-31",
+    "effects": {
+      "cancel": 0.03300000000000003,
+      "short": 0.848,
+      "reroute": 0.83
+    },
+    "score_model": 0.8875,
+    "score_all_rules": 0.89967,
+    "delta_all_points": 1.217,
+    "score_new_rules": 0.90238,
+    "delta_new_points": 1.488,
+    "rules": [
+      {
+        "id": "r12",
+        "name": "12: объезд, 01.09-31.10",
+        "cells": 304,
+        "delta_points": -0.264,
+        "cells_wape_model": 0.093,
+        "cells_wape_rule": 0.196,
+        "started_after_cut": false
+      },
+      {
+        "id": "r19",
+        "name": "7 и 50: укорачивание, 01.09-31.10",
+        "cells": 122,
+        "delta_points": -0.003,
+        "cells_wape_model": 0.299,
+        "cells_wape_rule": 0.32,
+        "started_after_cut": false
+      },
+      {
+        "id": "r20",
+        "name": "7: укорачивание, 06.09-31.10",
+        "cells": 304,
+        "delta_points": 0.267,
+        "cells_wape_model": 0.609,
+        "cells_wape_rule": 0.378,
+        "started_after_cut": true
+      },
+      {
+        "id": "r21",
+        "name": "50: отмена, 06.09-31.10",
+        "cells": 304,
+        "delta_points": 1.17,
+        "cells_wape_model": 16.939,
+        "cells_wape_rule": 1.115,
+        "started_after_cut": true
+      },
+      {
+        "id": "r22",
+        "name": "11 и 17 и 25: объезд, 13.09-13.09",
+        "cells": 30,
+        "delta_points": -0.014,
+        "cells_wape_model": 0.129,
+        "cells_wape_rule": 0.167,
+        "started_after_cut": true
+      },
+      {
+        "id": "r23",
+        "name": "11 и 17 и 25: объезд, 16.09-19.09",
+        "cells": 60,
+        "delta_points": -0.0,
+        "cells_wape_model": 0.249,
+        "cells_wape_rule": 0.251,
+        "started_after_cut": true
+      },
+      {
+        "id": "r24",
+        "name": "7: объезд, 20.09-28.09",
+        "cells": 76,
+        "delta_points": 0.076,
+        "cells_wape_model": 0.755,
+        "cells_wape_rule": 0.474,
+        "started_after_cut": true
+      },
+      {
+        "id": "r25",
+        "name": "11 и 17 и 25: объезд, 24.09-25.09",
+        "cells": 30,
+        "delta_points": -0.0,
+        "cells_wape_model": 0.209,
+        "cells_wape_rule": 0.29,
+        "started_after_cut": true
+      },
+      {
+        "id": "r26",
+        "name": "7 и 50: укорачивание, 28.10-31.10",
+        "cells": 8,
+        "delta_points": 0.003,
+        "cells_wape_model": 0.472,
+        "cells_wape_rule": 0.281,
+        "started_after_cut": true
+      }
+    ]
+  }
+}
