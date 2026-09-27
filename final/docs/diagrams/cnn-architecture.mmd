@@ -1,0 +1,27 @@
+flowchart TB
+    H["История 14 суток<br/>13 каналов x 336 часов<br/>посадки, календарь, события"]
+    C1["Conv1d 13→40, ядро 50<br/>GELU · MaxPool 2 · dropout"]
+    C2["Conv1d 40→40, ядро 50<br/>GELU · MaxPool 2 · dropout"]
+    C3["Conv1d 40→20, ядро 50<br/>GELU · MaxPool 2 · dropout"]
+    F["Код истории, 840"]
+    R["Эмбеддинг маршрута, 8"]
+    T["Календарь и события<br/>целевого дня, 10"]
+    L["lead 1-61, 1"]
+    CAT["Конкатенация, 859"]
+    HD["Linear 859→320 · GELU<br/>Linear 320→320 · GELU<br/>Linear 320→24"]
+    O["softplus x масштаб<br/>24 часа посадок"]
+    H --> C1 --> C2 --> C3 --> F --> CAT
+    R --> CAT
+    T --> CAT
+    L --> CAT
+    CAT --> HD --> O
+    subgraph ONCE[Один раз на контекст]
+        C1
+        C2
+        C3
+        F
+    end
+    subgraph EACH[На каждый целевой день]
+        HD
+        O
+    end

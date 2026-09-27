@@ -1,0 +1,38 @@
+@startuml
+!pragma layout smetana
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+actor "Диспетчер" as user
+package "Обучение, Python" {
+  [Подготовка почасовой сетки] as prep
+  [Обучение CNN\nPyTorch] as train
+  [Экспорт головы\nPyTorch -> JSON] as export
+  [Ансамбль\nCatBoost + MLP] as ens
+}
+database "Валидации\nянварь-октябрь" as data
+database "Календарь XML\nи расписание событий" as cal
+artifact "Чекпойнт CNN" as ckpt
+artifact "Голова CNN + эталонные дни" as head
+artifact "Модель CatBoost" as cbm
+package "Контейнер сервиса, Go" {
+  [HTTP API\n/forecast /explain /export\n/model /stats /healthz] as api
+  [Голова CNN\nна каждый запрос] as cnnhead
+  [Встроенный UI] as ui
+}
+[Нагрузочный клиент] as load
+data --> prep
+cal --> prep
+prep --> train
+prep --> ens
+train --> ckpt
+ckpt --> export
+export --> head
+head --> cnnhead
+ens --> cbm
+cbm ..> api : резервный\nстенд
+cnnhead --> api
+api --> ui
+user --> ui
+load --> api
+@enduml

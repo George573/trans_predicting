@@ -1,0 +1,29 @@
+@startuml
+!pragma layout smetana
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+node "Сборка образа, Docker" {
+  node "Стадия 1: Python + PyTorch" as s1 {
+    artifact "Чекпойнт CNN" as ck
+    artifact "Посадки до даты отсечки" as lab
+    component "Экспорт головы" as ex
+  }
+  node "Стадия 2: Go toolchain" as s2 {
+    component "Статический бинарник сервера" as bin
+  }
+}
+node "Итоговый образ: scratch, UID 65534" as run {
+  component "Go-сервер + встроенный UI" as srv
+  artifact "Голова CNN + эталон" as hj
+}
+node "Сеть compose" {
+  component "Нагрузочный клиент" as load
+}
+actor "Браузер" as br
+ck --> ex
+lab --> ex
+ex --> hj
+bin --> srv
+br --> srv : HTTP :8090\nbasic auth
+load --> srv : HTTP
+@enduml

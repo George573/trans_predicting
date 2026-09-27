@@ -1,0 +1,36 @@
+flowchart LR
+    subgraph SRC[Источники]
+        V[Валидации<br/>январь-октябрь 2025]
+        CAL[Производственный<br/>календарь РФ]
+        EV[События и<br/>ночная работа]
+        WX[Погода<br/>Open-Meteo, ECMWF]
+        OSM[OpenStreetMap<br/>линии маршрутов]
+    end
+    subgraph PREP[Подготовка]
+        G[Почасовая сетка<br/>маршрут x дата x час]
+    end
+    subgraph TRAIN[Обучение, Python]
+        CNN[CNN<br/>PyTorch]
+        ML[Ансамбль<br/>CatBoost + MLP]
+    end
+    subgraph ART[Артефакты]
+        CK[Чекпойнт CNN]
+        HJ[Голова CNN<br/>для Go + эталон]
+        CBM[Модель CatBoost]
+        CSV[Файл прогноза<br/>14 640 строк]
+    end
+    subgraph SVC[Сервис, Go]
+        API[HTTP API<br/>basic auth]
+        UI[Встроенный UI]
+    end
+    V --> G
+    CAL --> G
+    EV --> G
+    WX --> ML
+    G --> CNN --> CK --> HJ --> API
+    G --> ML --> CSV
+    ML --> CBM -.резерв.-> API
+    OSM -.карта.-> UI
+    API --> UI
+    D([Диспетчер]) --> UI
+    J([Платформа хакатона]) --- CSV

@@ -1,0 +1,25 @@
+@startuml
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+participant "Экспорт\n(PyTorch)" as py
+participant "Файл головы" as f
+participant "Go-сервер" as go
+participant "Клиент" as cl
+== Сборка образа ==
+py -> py : энкодер по истории 14 суток\nкаждого маршрута
+py -> py : история и эмбеддинг x их часть\nвесов первого слоя = константа маршрута
+py -> f : константы маршрутов, веса зависящей от даты части,\nостальные слои, эталонные дни целиком
+== Старт сервера ==
+go -> f : загрузить
+go -> go : посчитать весь горизонт
+go -> go : сравнить с эталонными днями
+alt расхождение > 1e-4
+  go -> go : отказ запуска
+else совпадает
+  go -> cl : /healthz = ok, приём запросов
+end
+== Запрос ==
+cl -> go : forecast
+go -> go : вклад календаря и lead, GELU,\nостальные слои, softplus
+go --> cl : прогноз
+@enduml

@@ -1,0 +1,33 @@
+@startuml
+!pragma layout smetana
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+actor "Диспетчер" as user
+package "Бандл версии, загружается при старте" {
+  artifact "Модель" as m
+  artifact "Калибровка\nмаршрут x день недели" as cal
+  artifact "Коридор\nэмпирические квантили" as cor
+  artifact "Постобработка\nмаршрут 5, Новый год" as pp
+  artifact "Каталог условий\nс паспортами" as cond
+  artifact "Геометрия линий\nGeoJSON" as geo
+}
+package "Сервис, Go" {
+  [Признаки и модель] as model
+  [Калибровка и постобработка] as post
+  [Слой условий\nпроизведение, аудит] as layer
+  [API по контракту OpenAPI 3.1\nPOST forecast, export CSV/XLSX,\nexplain, conditions, routes] as api
+}
+[Дашборд\nReact + TypeScript,\nкарта Leaflet] as ui
+m --> model
+cal --> post
+pp --> post
+cond --> layer
+cor --> layer
+model --> post
+post --> layer
+layer --> api
+api --> ui
+geo --> ui
+user --> ui
+@enduml
