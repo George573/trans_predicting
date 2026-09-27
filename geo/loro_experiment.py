@@ -298,6 +298,51 @@ def run_setup(panel: pl.DataFrame, geo: pl.DataFrame, setup: str, cut: date) -> 
     return {"folds": folds, "levels_all": levels_all}
 
 
+def profile_similarity(panel: pl.DataFrame) -> list[dict]:
+    """Насколько похожи формы маршрутов между собой - без всякой модели.
+
+    Суточный профиль считается по рабочим дням оценочного окна, недельный - по всем дням.
+    Профиль каждого маршрута нормирован на своё среднее, отклонение - сумма модулей разниц
+    с общим профилем, делённая на сумму общего профиля. Это верхняя оценка того, что стадия
+    формы может потерять на новой линии.
+    """
+    evaluation = panel.filter((pl.col("date") >= EVAL[0]) & (pl.col("date") <= EVAL[1]))
+
+    def deviations(df: pl.DataFrame, key: str) -> tuple[dict[int, float], dict[int, int]]:
+        profile = (df.group_by(["route", key]).agg(pl.col("target").mean().alias("m"))
+                   .with_columns((pl.col("m") / pl.col("m").mean().over("route")).alias("z")))
+        wide = profile.pivot(on="route", index=key, values="z").sort(key)
+        routes = [c for c in wide.columns if c != key]
+        matrix = wide.select(routes).to_numpy()
+        pooled_profile = matrix.mean(axis=1)
+        keys = wide[key].to_list()
+        return (
+            {int(r): float(np.abs(matrix[:, j] - pooled_profile).sum() / pooled_profile.sum())
+             for j, r in enumerate(routes)},
+            {int(r): keys[int(np.argmax(matrix[:, j]))] for j, r in enumerate(routes)},
+        )
+
+    hourly, peak = deviations(evaluation.filter(~pl.col("is_weekend")), "hour")
+    weekly, _ = deviations(evaluation, "weekday")
+
+    # режим работы: отношение выходных к будням по месяцам. Резкое падение - это закрытие
+    # линии на выходные, а не свойство географии, и стадия формы такое предсказать не может.
+    ratio = (panel.with_columns(pl.col("date").dt.month().alias("month"))
+             .group_by(["route", "month", "is_weekend"]).agg(pl.col("target").mean().alias("m"))
+             .pivot(on="is_weekend", index=["route", "month"], values="m")
+             .with_columns((pl.col("true") / pl.col("false")).alias("ratio")))
+    by_month = {(int(r["route"]), int(r["month"])): r["ratio"] for r in ratio.iter_rows(named=True)}
+
+    return [{
+        "route": route,
+        "hourly_deviation_pct": round(hourly[route] * 100, 1),
+        "weekly_deviation_pct": round(weekly[route] * 100, 1),
+        "peak_hour": peak[route],
+        "weekend_ratio_aug": round(by_month[(route, 8)], 3),
+        "weekend_ratio_oct": round(by_month[(route, 10)], 3),
+    } for route in ROUTES]
+
+
 def score(y: np.ndarray, p: np.ndarray) -> dict[str, float]:
     """WAPE-score, смещение по уровню и WAPE-score формы - после подгонки суммы под факт"""
     total_y, total_p = y.sum(), p.sum()
@@ -499,6 +544,9 @@ def main() -> None:
         "n_permutations": N_PERMUTATIONS, "n_bootstrap": N_BOOTSTRAP, "seed": SEED,
     }}
 
+    results["profiles"] = profile_similarity(panel)
+    print(table(results["profiles"], "Схожесть форм маршрутов между собой, без модели"))
+
     levels_full = mean_levels(panel)
     loo = level_loo_table(geo, levels_full)
     results["level_loo"] = loo
@@ -553,6 +601,7 @@ def main() -> None:
     pl.DataFrame(summary_rows).write_csv(ART / "loro_summary.csv", separator=";")
     pl.DataFrame(per_route_rows).write_csv(ART / "loro_per_route.csv", separator=";")
     pl.DataFrame(loo).write_csv(ART / "level_loo.csv", separator=";")
+    pl.DataFrame(results["profiles"]).write_csv(ART / "profiles.csv", separator=";")
     print(f"\nзаписано в {ART}")
 
 
