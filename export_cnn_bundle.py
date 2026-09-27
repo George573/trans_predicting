@@ -2,6 +2,7 @@ import argparse
 import hashlib
 import tempfile
 from datetime import date, datetime, timedelta, timezone
+from functools import cache
 from pathlib import Path
 
 import numpy as np
@@ -15,16 +16,21 @@ from tram_forecast.data import (
     request_inputs,
 )
 from tram_forecast.predict import fixed_forecast
+from tram_forecast.runner import InferenceRunner
 from tram_forecast.train import load_model, train
 
 from export_bundle import corridor, write
 from metrics import wape
 from postprocess import ROUTE5_SHARE, fill_route5
+from tram_forecast import russian_calendar
 
 LABELS = ("dataset/labels/labels_day_train.csv", "dataset/labels/labels_day_test.csv")
 CUTOFF = date(2025, 11, 1)
 VALID_CUTOFF = date(2025, 9, 1)
 DAYS = 61
+RECURSIVE_FROM = date(2026, 1, 1)
+RECURSIVE_DAYS = 120
+CNN_REVISION = "1014c1e"
 HISTORY_DAYS = 14
 FLAGS = ("is_holiday", "is_day_off", "is_short_working_day")
 EVENTS = ("extended_night_service", "event_near_route", "is_citywide_event")
@@ -89,11 +95,15 @@ def head(model, boardings: Boardings) -> dict:
 def replay(h: dict, scale: float) -> np.ndarray:
     t = {k: torch.tensor(h[k], dtype=torch.float64) for k in (
         "hidden_base", "hidden_request", "hidden2_weight", "hidden2_bias", "output_weight", "output_bias", "inputs")}
-    out = np.zeros((len(ROUTES), DAYS, 24))
+    rec = {k: torch.tensor(h["recursive"][k], dtype=torch.float64) for k in ("hidden_base", "inputs")}
+    out = np.zeros((len(ROUTES), DAYS + RECURSIVE_DAYS, 24))
     for r in range(len(ROUTES)):
-        for d in range(DAYS):
-            x = torch.cat((t["inputs"][r, d], torch.tensor([d / 60], dtype=torch.float64)))
-            h1 = torch.nn.functional.gelu(t["hidden_base"][r] + t["hidden_request"] @ x)
+        for d in range(DAYS + RECURSIVE_DAYS):
+            if d < DAYS:
+                base, x = t["hidden_base"][r], torch.cat((t["inputs"][r, d], torch.tensor([d / 60], dtype=torch.float64)))
+            else:
+                base, x = rec["hidden_base"][r, d - DAYS], torch.cat((rec["inputs"][r, d - DAYS], torch.zeros(1, dtype=torch.float64)))
+            h1 = torch.nn.functional.gelu(base + t["hidden_request"] @ x)
             h2 = torch.nn.functional.gelu(t["hidden2_weight"] @ h1 + t["hidden2_bias"])
             out[r, d] = (torch.nn.functional.softplus(t["output_weight"] @ h2 + t["output_bias"]) * scale).numpy()
     return out
@@ -106,12 +116,15 @@ def grid_frame(values: np.ndarray, start: date) -> pl.DataFrame:
 
 
 def main(a: argparse.Namespace) -> None:
+    russian_calendar._year_overrides = local_calendar
     model = load_model(a.checkpoint)
     boardings = load_boardings(a.events)
     raw = fixed_forecast(model, boardings, CUTOFF, DAYS, HISTORY_DAYS)
     h = head(model, boardings)
+    h["recursive"], rolled = recursive(model, boardings)
     scale = float(model.scale)
     replayed = replay(h, scale)
+    raw = np.concatenate((raw, rolled), axis=1)
     drift = np.abs(replayed - raw).max()
     assert np.allclose(replayed, raw, rtol=1e-4, atol=1e-3), drift
 
@@ -126,15 +139,14 @@ def main(a: argparse.Namespace) -> None:
     oof = oof.with_columns(((pl.col("date") - pl.lit(VALID_CUTOFF)).dt.total_days() + 1).alias("lead"))
     score = round(1 - wape(oof["target"], oof["pred"]), 4)
 
-    grid = grid_frame(raw, CUTOFF)
-    reference = (fill_route5(grid).rename({"prediction": "final"})
-                 .join(grid.rename({"prediction": "raw"}), on=KEY, how="left").select(KEY + ["raw", "final"]).sort(KEY))
-    assert reference.height == 14640
+    reference = pl.concat([reference_part(raw[:, :DAYS], CUTOFF), reference_part(raw[:, DAYS:], RECURSIVE_FROM)]).sort(KEY)
+    assert reference.height == 43440
 
     out = a.out
     out.mkdir(parents=True, exist_ok=True)
     reference.write_csv(out / "reference.csv")
     features = list(REQUEST_INPUT_FEATURES) + ["lead"]
+    last = (RECURSIVE_FROM + timedelta(days=RECURSIVE_DAYS - 1)).isoformat()
     parameters = sum(p.numel() for p in model.parameters())
     write(out / "head.json", {
         "model": a.name, "cutoff": CUTOFF.isoformat(), "days": DAYS, "history_days": HISTORY_DAYS,
@@ -146,17 +158,63 @@ def main(a: argparse.Namespace) -> None:
     digest = hashlib.sha256(a.checkpoint.read_bytes()).hexdigest()
     write(out / "meta.json", {
         "version": f"{created}/{digest[:6]}", "model": a.name, "mode": "service",
-        "train_period": ["2025-01-01", a.train_to], "horizon": [CUTOFF.isoformat(), (CUTOFF + timedelta(days=DAYS - 1)).isoformat()],
+        "train_period": ["2025-01-01", a.train_to], "horizon": [CUTOFF.isoformat(), last],
+        "recursive_from": RECURSIVE_FROM.isoformat(), "cnn_revision": CNN_REVISION,
         "wape_score": score, "features": features, "cat_features": [], "cutoff": CUTOFF.isoformat(),
         "history_days": HISTORY_DAYS, "parameters": parameters, "checkpoint": a.checkpoint.name, "checkpoint_sha256": digest,
         "validation": {"cutoff": VALID_CUTOFF.isoformat(), "days": DAYS,
                        "checkpoint": a.validation_checkpoint.name if a.validation_checkpoint else "обучена рецептом notebooks/train.ipynb"},
         "created_at": created,
-        "reference": {"from": CUTOFF.isoformat(), "to": (CUTOFF + timedelta(days=DAYS - 1)).isoformat(),
+        "reference": {"from": CUTOFF.isoformat(), "to": last,
                       "rows": reference.height, "raw_tolerance": 1e-4},
     })
     print(f"бандл {out}: валидация сен-окт WAPE-score {score}, расхождение разложения головы {drift:.2e}, "
-          f"сумма ноя-дек {reference['final'].sum():,.0f}")
+          f"сумма ноя-дек {reference.filter(pl.col('date') < RECURSIVE_FROM.isoformat())['final'].sum():,.0f}, "
+          f"янв-апр {reference.filter(pl.col('date') >= RECURSIVE_FROM.isoformat())['final'].sum():,.0f}")
+
+
+@cache
+def local_calendar(year: int) -> dict:
+    with open(f"input/calendar/{year}.xml", "rb") as f:
+        return russian_calendar.parse_calendar(f, year)
+
+
+@torch.inference_mode()
+def recursive(model, boardings: Boardings) -> tuple[dict, np.ndarray]:
+    runner = InferenceRunner(model)
+    first = model.head[0]
+    last = RECURSIVE_FROM + timedelta(days=RECURSIVE_DAYS - 1)
+    days = [RECURSIVE_FROM + timedelta(days=d) for d in range(RECURSIVE_DAYS)]
+    base, inputs, usual, rolled = [], [], [], np.zeros((len(ROUTES), RECURSIVE_DAYS, 24))
+    for i, route in enumerate(ROUTES):
+        context = runner.apply_context(boardings, route, CUTOFF)
+        route_base = []
+        day = CUTOFF
+        while True:
+            prediction = runner.predict_day(context, day)
+            if day >= RECURSIVE_FROM:
+                encoded = context._encoded[0]
+                width = encoded.shape[0]
+                split = width + model.route.embedding_dim
+                hidden = first.weight[:, :width] @ encoded + first.weight[:, width:split] @ model.route.weight[i + 1] + first.bias
+                route_base.append([float(f"{v:.9g}") for v in hidden.tolist()])
+                rolled[i, (day - RECURSIVE_FROM).days] = prediction
+            if day == last:
+                break
+            context = runner.update_context(context, day, prediction)
+            day += timedelta(days=1)
+        base.append(route_base)
+        request = request_inputs(boardings.scheduled_events, route, days, missing_zero=True)
+        inputs.append(request.tolist())
+        usual.append(usual_inputs(request, days).tolist())
+    return {"from": RECURSIVE_FROM.isoformat(), "days": RECURSIVE_DAYS,
+            "hidden_base": base, "inputs": inputs, "usual_inputs": usual}, rolled
+
+
+def reference_part(values: np.ndarray, start: date) -> pl.DataFrame:
+    grid = grid_frame(values, start)
+    return (fill_route5(grid).rename({"prediction": "final"})
+            .join(grid.rename({"prediction": "raw"}), on=KEY, how="left").select(KEY + ["raw", "final"]))
 
 
 if __name__ == "__main__":

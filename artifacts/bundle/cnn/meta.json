@@ -1,5 +1,5 @@
 {
-  "version": "2026-09-27T17:27:36Z/8c16e8",
+  "version": "2026-09-27T19:04:00Z/8c16e8",
   "model": "cnn_14days_v9_events",
   "mode": "service",
   "train_period": [
@@ -8,8 +8,10 @@
   ],
   "horizon": [
     "2025-11-01",
-    "2025-12-31"
+    "2026-04-30"
   ],
+  "recursive_from": "2026-01-01",
+  "cnn_revision": "1014c1e",
   "wape_score": 0.8205,
   "features": [
     "weekday_sin",
@@ -35,11 +37,11 @@
     "days": 61,
     "checkpoint": "cnn_validation.pt"
   },
-  "created_at": "2026-09-27T17:27:36Z",
+  "created_at": "2026-09-27T19:04:00Z",
   "reference": {
     "from": "2025-11-01",
-    "to": "2025-12-31",
-    "rows": 14640,
+    "to": "2026-04-30",
+    "rows": 43440,
     "raw_tolerance": 0.0001
   }
 }
