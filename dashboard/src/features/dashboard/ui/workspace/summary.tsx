@@ -1,4 +1,4 @@
-import { Alert, Anchor, Badge, Button, Group, Paper, Stack, Table, Text } from "@mantine/core";
+import { Alert, Anchor, Badge, Button, Group, Paper, Stack, Table, Text, Title } from "@mantine/core";
 import type { ForecastResponse } from "../../model/forecast-state";
 import { momentLabel, quantityLabel } from "../../lib/moment";
 import type { Comparison } from "./workspace";
@@ -21,7 +21,7 @@ function exceedances(data: ForecastResponse) {
 }
 
 export function Summary({ data, comparison, selectIndex, onRouteSelect }: Props) {
-  if (data.series.length === 0) return <Paper p="md" withBorder><Text fw={600}>Цифры и тревоги</Text><Text size="sm" c="dimmed">Нет данных: сервис вернул прогноз без рядов.</Text></Paper>;
+  if (data.series.length === 0) return <Paper p="md" withBorder><Title order={6}>Цифры и тревоги</Title><Text size="sm" c="dimmed">Нет данных: сервис вернул прогноз без рядов.</Text></Paper>;
   const total = data.series.reduce((sum, series) => sum + series.total, 0);
   const baseTotal = data.series.reduce((sum, series) => sum + series.base_total, 0);
   const difference = total - baseTotal;
@@ -33,7 +33,7 @@ export function Summary({ data, comparison, selectIndex, onRouteSelect }: Props)
 
   return <Paper p="md" withBorder>
     <Stack gap="sm">
-      <Text fw={600}>Цифры и тревоги</Text>
+      <Title order={6}>Цифры и тревоги</Title>
 
       <Stack gap={2}>
         <Text>Посадки за период: {amount(total)}</Text>

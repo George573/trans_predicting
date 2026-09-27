@@ -1,7 +1,7 @@
-import { Paper, Stack, Text } from "@mantine/core";
+import { Paper, Stack, Text, Title } from "@mantine/core";
 import { CompositeChart } from "@mantine/charts";
 import type { ForecastResponse } from "../../model/forecast-state";
-import { momentLabel, quantityLabel } from "../../lib/moment";
+import { momentAt, momentLabel, quantityLabel } from "../../lib/moment";
 import { recursiveIndex } from "../../domain/model";
 import type { Comparison } from "./workspace";
 
@@ -25,7 +25,7 @@ export function ForecastChart({ data, comparison, recursive, selectedIndex, sele
 
   return <Paper p="md" withBorder>
     <Stack gap="xs">
-      <Text fw={600}>Прогноз посадок: {single ? `маршрут ${single.route}` : `сумма маршрутов ${data.series.map((series) => series.route).join(", ")}`}</Text>
+      <Title order={6}>Прогноз посадок: {single ? `маршрут ${single.route}` : `сумма маршрутов ${data.series.map((series) => series.route).join(", ")}`}</Title>
       <Text size="xs" c="dimmed">Величина: {quantityLabel(data.step)}. Выбранный момент: {points.length > 0 ? momentLabel(data, Math.min(selectedIndex, points.length - 1)) : "нет точек"}</Text>
       <CompositeChart
         h={260}
@@ -35,7 +35,7 @@ export function ForecastChart({ data, comparison, recursive, selectedIndex, sele
         curveType="linear"
         withLegend
         referenceLines={[...(selectedIndex < points.length ? [{ x: selectedIndex, color: "red.6" }] : []), ...(boundary === null ? [] : [{ x: boundary, color: "yellow.6", label: "авторегрессия", labelPosition: "insideTopRight" as const }])]}
-        xAxisProps={{ tickFormatter: (value: number) => momentLabel(data, Number(value)), minTickGap: 32 }}
+        xAxisProps={{ tickFormatter: (value: number) => data.step === "1h" ? momentAt(data, Number(value)).format("HH:mm") : momentLabel(data, Number(value)), minTickGap: 32 }}
         composedChartProps={{ onClick: (state) => { const index = Number(state?.activeLabel); if (Number.isInteger(index) && index >= 0 && index < points.length) selectIndex(index); } }}
         tooltipProps={{ content: ({ active, payload }) => {
           const point = payload?.[0]?.payload as Point | undefined;

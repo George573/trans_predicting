@@ -1,4 +1,4 @@
-import { Alert, Button, Group, Menu, Skeleton, Stack, Text } from "@mantine/core";
+import { Alert, Button, Group, Menu, Skeleton, Stack, Text, Title } from "@mantine/core";
 import { useConditionsCatalog } from "../api/catalog";
 import { ConditionCard } from "./condition-card";
 import { conditionClassOf, conditionClassTitles, conditionLimit, conditionTitleOf, createCondition, type CatalogEntry, type ConditionClass, type ConditionInput, type ForecastResponse, type Horizon, type RouteNumber } from "../domain/conditions";
@@ -43,7 +43,7 @@ export function ScenarioPanel({ conditions, requestRoutes, availableRoutes, hori
   return (
     <Stack gap="sm">
       <Group justify="space-between">
-        <Text fw={600}>Условия</Text>
+        <Title order={6}>Условия</Title>
         <Text size="xs" c="dimmed">{conditions.length} из {conditionLimit}</Text>
       </Group>
       <ApplicabilityBanner response={response} horizon={horizon} />

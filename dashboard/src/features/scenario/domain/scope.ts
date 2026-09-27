@@ -136,3 +136,7 @@ export function monthsDates(months: string[]): string[] {
 export function fitsDatesLimit(dates: string[]): boolean {
   return dates.length <= datesLimit;
 }
+
+export function formatDate(date: string): string {
+  return dayjs(date).format("DD.MM.YYYY");
+}

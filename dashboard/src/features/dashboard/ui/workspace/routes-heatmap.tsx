@@ -1,5 +1,5 @@
 import { Fragment } from "react";
-import { Group, Paper, ScrollArea, Stack, Text } from "@mantine/core";
+import { Group, Paper, ScrollArea, Stack, Text, Title } from "@mantine/core";
 import type { ForecastResponse, Route } from "../../model/forecast-state";
 import { routeLevel } from "../../lib/level";
 import { momentAt, momentLabel, quantityLabel } from "../../lib/moment";
@@ -13,7 +13,7 @@ export function RoutesHeatmap({ data, routes, selectedIndex, selectIndex, route,
 
   return <Paper p="md" withBorder>
     <Stack gap="xs">
-      <Text fw={600}>Маршруты и время</Text>
+      <Title order={6}>Маршруты и время</Title>
       <Text size="xs" c="dimmed">Цвет - % от обычного уровня, та же шкала, что на карте. Число в подсказке - {quantityLabel(data.step)}.</Text>
       <Group gap="md">
         {[{ color: "#3bb8a3", label: "ниже 80% от обычного уровня" }, { color: "#e3b350", label: "80-120% от обычного уровня" }, { color: "#ef6b73", label: "выше 120% от обычного уровня" }, { color: "#778899", label: "нет сравнения" }].map((item) =>

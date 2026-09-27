@@ -1,6 +1,6 @@
 import { Button, Group, Stack, Text } from "@mantine/core";
 import type { Scope } from "../../domain/conditions";
-import { datesOutsidePeriod, effectiveDates, expandDateRange, operationalScenarioDays, weekdayNumbers, weekdayOf, weekdayTitles, withDates, withWeekdays } from "../../domain/scope";
+import { datesOutsidePeriod, effectiveDates, expandDateRange, formatDate, operationalScenarioDays, weekdayNumbers, weekdayOf, weekdayTitles, withDates, withWeekdays } from "../../domain/scope";
 
 export function WeekScope({ scope, from, to, operational, emptyWarning, onChange }: {
   scope?: Scope;
@@ -53,7 +53,7 @@ export function WeekScope({ scope, from, to, operational, emptyWarning, onChange
               aria-pressed={selected}
               onClick={() => toggleDate(date)}
             >
-              {date.slice(8)}.{date.slice(5, 7)} {weekdayTitles[weekdayOf(date) - 1]}
+              {formatDate(date)} {weekdayTitles[weekdayOf(date) - 1]}
             </Button>
           );
         })}
@@ -64,7 +64,7 @@ export function WeekScope({ scope, from, to, operational, emptyWarning, onChange
         {intersection.length === 0 ? "Пересечение дат и дней недели пусто" : `Пересечение: ${intersection.length} дат, общий диапазон часов применяется к каждой`}
       </Text>
       {emptyWarning && <Text size="xs" c="yellow">{emptyWarning}</Text>}
-      {outside.length > 0 && <Text size="xs" c="yellow">Вне текущего периода сохранено дат: {outside.length} ({outside[0]} и далее). Область не изменена.</Text>}
+      {outside.length > 0 && <Text size="xs" c="yellow">Вне текущего периода сохранено дат: {outside.length} ({formatDate(outside[0])} и далее). Область не изменена.</Text>}
       {operational && intersection.length > operationalScenarioDays && (
         <Text size="xs" c="yellow">Оперативный сценарий рассчитан не больше чем на {operationalScenarioDays} суток, выбрано {intersection.length}.</Text>
       )}

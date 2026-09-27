@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button, Group, SegmentedControl, Stack, Text } from "@mantine/core";
 import { DatePicker } from "@mantine/dates";
 import type { Scope } from "../../domain/conditions";
-import { datesLimit, datesOfWeekdays, datesOutsidePeriod, expandDateRange, fitsDatesLimit, monthDates, monthTitle, seasonMonths, weekdayTemplates, withDates } from "../../domain/scope";
+import { datesLimit, datesOfWeekdays, datesOutsidePeriod, expandDateRange, fitsDatesLimit, formatDate, monthDates, monthTitle, seasonMonths, weekdayTemplates, withDates } from "../../domain/scope";
 
 function SeasonStrip({ selected, onToggle }: { selected: string[]; onToggle: (month: string) => void }) {
   return (
@@ -85,7 +85,7 @@ export function DatesScope({ scope, from, to, season, onChange }: {
             }}
           />}
       <Text size="xs" c={explicit === null ? "dimmed" : undefined}>
-        {explicit === null ? "dates не задан: все даты периода" : `Отправляется dates: ${explicit.length} дат, от ${explicit[0]} до ${explicit.at(-1)}`}
+        {explicit === null ? "dates не задан: все даты периода" : `Отправляется dates: ${explicit.length} дат, от ${formatDate(explicit[0])} до ${formatDate(explicit[explicit.length - 1])}`}
       </Text>
       {!fitsDatesLimit(chosen) && <Text size="xs" c="yellow">Контракт принимает не больше {datesLimit} дат.</Text>}
       {outside.length > 0 && <Text size="xs" c="yellow">Вне текущего периода сохранено дат: {outside.length}. Область не изменена.</Text>}

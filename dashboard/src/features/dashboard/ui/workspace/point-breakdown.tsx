@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Alert, Badge, Button, Group, Paper, ScrollArea, Select, Skeleton, Stack, Table, Text } from "@mantine/core";
+import { Alert, Badge, Button, Group, Paper, ScrollArea, Select, Skeleton, Stack, Table, Text, Title } from "@mantine/core";
 import { fetchClient } from "@/shared/api/instance";
 import type { components } from "@/shared/api/schema/generated";
 import type { ForecastRequest, ForecastResponse } from "../../model/forecast-state";
+import { formatDate } from "@/features/scenario";
 import { momentAt } from "../../lib/moment";
 
 type ExplainResponse = components["schemas"]["ExplainResponse"];
@@ -51,14 +52,14 @@ export function PointBreakdown({ data, request, selectedIndex, route, onRoute }:
 
   return <Paper p="md" withBorder>
     <Stack gap="xs">
-      <Text fw={600}>Разбор точки</Text>
+      <Title order={6}>Разбор точки</Title>
       <Group gap="xs" align="end">
         {routes.length > 1 && <Select size="xs" w={140} label="Маршрут" placeholder="выберите" value={askedRoute === null ? null : String(askedRoute)} onChange={(value) => onRoute(value === null ? null : Number(value))} data={routes.map((item) => String(item))} />}
-        {data.step === "1mo" && <Select size="xs" w={140} label="Дата" placeholder="выберите" value={day} onChange={setDay} data={Array.from({ length: moment.daysInMonth() }, (_, index) => moment.date(index + 1).format("YYYY-MM-DD"))} />}
+        {data.step === "1mo" && <Select size="xs" w={140} label="Дата" placeholder="выберите" value={day} onChange={setDay} data={Array.from({ length: moment.daysInMonth() }, (_, index) => { const value = moment.date(index + 1).format("YYYY-MM-DD"); return { value, label: formatDate(value) }; })} />}
         {data.step !== "1h" && <Select size="xs" w={110} label="Час" placeholder="выберите" value={hour} onChange={setHour} data={Array.from({ length: 24 }, (_, index) => String(index))} />}
       </Group>
       <Text size="xs" c="dimmed">
-        {askedRoute === null ? "Выберите маршрут: сумма сети не разбирается." : askedDate === null ? "Выберите дату внутри месяца." : askedHour === null ? "Выберите час: агрегат за сутки не подписывается значением разбора." : `Маршрут ${askedRoute}, ${askedDate}, ${String(askedHour).padStart(2, "0")}:00`}
+        {askedRoute === null ? "Выберите маршрут: сумма сети не разбирается." : askedDate === null ? "Выберите дату внутри месяца." : askedHour === null ? "Выберите час: агрегат за сутки не подписывается значением разбора." : `Маршрут ${askedRoute}, ${formatDate(askedDate)}, ${String(askedHour).padStart(2, "0")}:00`}
       </Text>
       {loading && <Skeleton height={120} />}
       {error && <Alert color="red" p="xs">{error}<Button size="compact-xs" ml="sm" onClick={() => retry((value) => value + 1)}>Повторить</Button></Alert>}
@@ -84,7 +85,7 @@ export function PointBreakdown({ data, request, selectedIndex, route, onRoute }:
           </Table.Tr>)}</Table.Tbody>
         </Table>}
         {result.warnings.map((warning, index) => <Alert key={index} color="yellow" p="xs">{warning.message}</Alert>)}
-        <Text size="xs" c="dimmed">Календарь: {Object.entries(result.calendar).map(([key, value]) => `${key} = ${String(value)}`).join(", ")}</Text>
+        <Text size="xs" c="dimmed">Календарь: {Object.entries(result.calendar).map(([key, value]) => `${key} = ${key === "date" ? formatDate(String(value)) : String(value)}`).join(", ")}</Text>
         <ScrollArea.Autosize mah={140}>
           <Table withTableBorder={false} verticalSpacing={1} fz="xs">
             <Table.Thead><Table.Tr><Table.Th>Признак</Table.Th><Table.Th>Значение</Table.Th><Table.Th>Вид</Table.Th><Table.Th>Хеш</Table.Th></Table.Tr></Table.Thead>

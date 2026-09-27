@@ -7,7 +7,7 @@ export function momentAt(data: Timeline, index: number) {
 }
 
 export function momentLabel(data: Timeline, index: number) {
-  return momentAt(data, index).format(data.step === "1h" ? "DD.MM HH:mm" : data.step === "1d" ? "DD.MM.YYYY" : "MM.YYYY");
+  return momentAt(data, index).format(data.step === "1h" ? "DD.MM.YYYY HH:mm" : data.step === "1d" ? "DD.MM.YYYY" : "MM.YYYY");
 }
 
 export function quantityLabel(step: Timeline["step"]) {

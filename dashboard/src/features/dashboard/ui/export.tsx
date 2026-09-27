@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Alert, Button, Group, Paper, Text } from "@mantine/core";
+import { Alert, Button, Group, Paper, Text, Title } from "@mantine/core";
 import { apiBaseUrl, authorizedFetch } from "@/shared/api/instance";
 import type { ForecastRequest } from "../model/forecast-state";
 
@@ -21,7 +21,7 @@ export function ExportControls({ request, acceptedRequest, ready }: Props) {
   const [pending, setPending] = useState<Format | null>(null);
   const [error, setError] = useState("");
   const season = request.horizon === "season";
-  const available = ready && !!acceptedRequest && JSON.stringify(acceptedRequest) === JSON.stringify(request);
+  const available = ready && !!acceptedRequest;
 
   async function download(format: Format) {
     if (!available || !acceptedRequest) return;
@@ -52,7 +52,7 @@ export function ExportControls({ request, acceptedRequest, ready }: Props) {
   }
 
   return <Paper p="md" withBorder>
-    <Text fw={600} mb="xs">Выгрузка текущего прогноза</Text>
+    <Title order={6} mb="xs">Выгрузка текущего прогноза</Title>
     <Group><Button disabled={!available || !!pending} loading={pending === "csv"} onClick={() => void download("csv")}>CSV</Button><Button disabled={!available || !!pending} loading={pending === "xlsx"} onClick={() => void download("xlsx")}>XLSX</Button></Group>
     {season && <Text size="xs" c="dimmed" mt="xs">Сезон выгружается по суткам: месячные суммы на экране сложены из этих строк.</Text>}
     {!available && <Text size="xs" c="dimmed" mt="xs">Дождитесь успешного обновления прогноза перед выгрузкой.</Text>}

@@ -1,4 +1,4 @@
-import { Badge, Paper, Stack, Table, Text } from "@mantine/core";
+import { Badge, Paper, Stack, Table, Text, Title } from "@mantine/core";
 import { ConditionPassport, conditionTypeTitles, formatSignedPercent } from "@/features/scenario";
 import type { ForecastResponse } from "../../model/forecast-state";
 
@@ -11,7 +11,7 @@ export function ConditionAudit({ data, title = "Аудит условий" }: { 
 
   return <Paper p="md" withBorder>
     <Stack gap="xs">
-      <Text fw={600}>{title}</Text>
+      <Title order={6}>{title}</Title>
       <Text size="sm">Базовый прогноз {amount(baseTotal)} -&gt; итог {amount(total)}, разница {difference >= 0 ? "+" : ""}{amount(difference)}{baseTotal > 0 ? ` (${formatSignedPercent(100 * difference / baseTotal)})` : ""}</Text>
       {baseTotal === 0 && <Text size="xs" c="dimmed">Базовая сумма равна нулю, доля изменения не считается.</Text>}
       {data.conditions.length === 0

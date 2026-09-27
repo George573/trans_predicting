@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
-import { Alert, Group, Paper, Text } from "@mantine/core";
+import { Alert, Group, Paper, Text, Title } from "@mantine/core";
 import type { ForecastResponse, Route } from "../model/forecast-state";
 import { apiBaseUrl, authorizedFetch } from "@/shared/api/instance";
 import { routeLevel } from "../lib/level";
@@ -25,6 +25,7 @@ export function RouteMap({ routes, selected, onSelect, data, selectedIndex }: Pr
     if (!element.current) return;
     const instance = L.map(element.current, { zoomControl: true, attributionControl: true }).setView([55.75, 37.62], 10);
     instance.attributionControl.setPrefix(false);
+    instance.getPane("tilePane")!.style.filter = "grayscale(1) invert(1) brightness(0.7) contrast(0.8)";
     map.current = instance;
     if (navigator.onLine) L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap", maxZoom: 18 }).addTo(instance);
     return () => { instance.remove(); map.current = null; };
@@ -48,12 +49,18 @@ export function RouteMap({ routes, selected, onSelect, data, selectedIndex }: Pr
     rings.current?.remove();
     const allowed = new Set(routes.filter((route) => route.has_geometry).map((route) => route.route));
     const filtered: FeatureCollection = { type: "FeatureCollection", features: geometry.features.filter((feature) => feature.properties.kind === "line" && allowed.has(Number(feature.properties.route) as Route["route"])) };
+    const weight = (route: number) => selected.includes(route) ? 7 : 5;
+    const opacity = (route: number) => selected.length && !selected.includes(route) ? 0.4 : 1;
+    const casing = L.geoJSON(filtered as unknown as Parameters<typeof L.geoJSON>[0], {
+      interactive: false,
+      style: (feature) => { const route = Number(feature?.properties?.route); return { color: "#05090d", weight: weight(route) + 4, opacity: opacity(route) * 0.9, lineCap: "round", lineJoin: "round" }; },
+    }).addTo(map.current);
     const layer = L.geoJSON(filtered as unknown as Parameters<typeof L.geoJSON>[0], {
       style: (feature) => {
         const route = Number(feature?.properties?.route);
         const series = data.series.find((item) => item.route === route);
         const level = routeLevel(series?.value[selectedIndex], series?.usual[selectedIndex]);
-        return { color: level.color, weight: selected.includes(route) ? 6 : 4, opacity: selected.length && !selected.includes(route) ? 0.45 : 0.95 };
+        return { color: level.color, weight: weight(route), opacity: opacity(route), lineCap: "round", lineJoin: "round" };
       },
       onEachFeature: (feature, item) => {
         const route = Number(feature.properties?.route);
@@ -79,7 +86,7 @@ export function RouteMap({ routes, selected, onSelect, data, selectedIndex }: Pr
       map.current.fitBounds(layer.getBounds(), { padding: [16, 16], maxZoom: 12 });
       fitted.current = shown;
     }
-    return () => { layer.remove(); ringLayer.remove(); };
+    return () => { casing.remove(); layer.remove(); ringLayer.remove(); };
   }, [geometry, routes, selected, onSelect, data, selectedIndex]);
 
   useEffect(() => {
@@ -87,9 +94,9 @@ export function RouteMap({ routes, selected, onSelect, data, selectedIndex }: Pr
     stopLayer.current?.remove();
     if (!geometry) return;
     const available = new Set(routes.map((route) => route.route));
-    const visible: FeatureCollection = { type: "FeatureCollection", features: geometry.features.filter((feature) => feature.properties.kind === "stop" && available.has(feature.properties.route as Route["route"]) && (selected.length === 0 || selected.includes(feature.properties.route))) };
+    const visible: FeatureCollection = { type: "FeatureCollection", features: geometry.features.filter((feature) => feature.properties.kind === "stop" && available.has(feature.properties.route as Route["route"]) && selected.includes(feature.properties.route)) };
     const layer = L.geoJSON(visible as unknown as Parameters<typeof L.geoJSON>[0], {
-      pointToLayer: (_, latlng) => L.circleMarker(latlng, { radius: 3, color: "#d9e2eb", weight: 1, fillColor: "#d9e2eb", fillOpacity: 0.8 }),
+      pointToLayer: (_, latlng) => L.circleMarker(latlng, { radius: 3.5, color: "#05090d", weight: 1.5, fillColor: "#f1f5f9", fillOpacity: 1 }),
       onEachFeature: (feature, item) => { if (feature.properties?.name) item.bindTooltip(String(feature.properties.name)); },
     }).addTo(map.current);
     stopLayer.current = layer;
@@ -98,15 +105,15 @@ export function RouteMap({ routes, selected, onSelect, data, selectedIndex }: Pr
 
   const missing = routes.filter((route) => route.has_geometry && geometry && !geometry.features.some((feature) => feature.properties.kind === "line" && feature.properties.route === route.route));
   return <Paper p="md" withBorder>
-    <Text fw={600} mb="sm">Карта маршрутов</Text>
+    <Title order={6} mb="sm">Карта маршрутов</Title>
     {error && <Alert color="yellow" mb="sm">{error}. Маршруты доступны в списке и графиках.</Alert>}
-    {geometry && !geometry.features.some((feature) => feature.properties.kind === "stop" && (selected.length === 0 || selected.includes(feature.properties.route))) && <Text size="xs" c="dimmed">Для выбранных маршрутов нет остановок в геометрии.</Text>}
+    {geometry && selected.length > 0 && !geometry.features.some((feature) => feature.properties.kind === "stop" && selected.includes(feature.properties.route)) && <Text size="xs" c="dimmed">Для выбранных маршрутов нет остановок в геометрии.</Text>}
     {missing.length > 0 && <Text size="xs" c="dimmed" mb="xs">Нет линии для маршрутов: {missing.map((route) => route.route).join(", ")}</Text>}
-    <div ref={element} style={{ height: 300, background: "#17232c", borderRadius: 8 }} aria-label="Карта трамвайных маршрутов" />
+    <div ref={element} style={{ height: "clamp(420px, 62vh, 760px)", background: "#10151b", borderRadius: 8 }} aria-label="Карта трамвайных маршрутов" />
     <Text size="xs" mt="xs">% от обычного уровня</Text>
     <Group gap="md"><Text size="xs" c="#3bb8a3">До 80%</Text><Text size="xs" c="#e3b350">80-120%</Text><Text size="xs" c="#ef6b73">Выше 120%</Text><Text size="xs" c="dimmed">Серый: нет сравнения</Text></Group>
     <Text size="xs" c="dimmed">Кольцо - превышение верхней границы коридора по маршруту в целом.</Text>
-    <Text size="xs" c="dimmed">Остановки показаны только как геометрия, без данных о посадках.</Text>
+    <Text size="xs" c="dimmed">Остановки показываются у выбранных маршрутов, только как геометрия, без данных о посадках.</Text>
     <Text size="xs" c="dimmed">Геометрия маршрутов и остановок: справочник и © OpenStreetMap, локальная копия из сервиса.</Text>
   </Paper>;
 }
