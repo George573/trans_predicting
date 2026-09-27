@@ -1,5 +1,10 @@
 # Boarding CNN with calendar and scheduled events
 
+This page describes the original direct CNN. For the added daily-patch Transformer
+and the selected direct/recursive blend, see
+[Seasonal patch Transformer and recursive CNN blend](patch_transformer.md).
+The no-feedback statements below apply to the direct CNN path only.
+
 The architecture is fixed and written directly in `src/tram_forecast/model.py`.
 There are no parallel branches, dilation choices, configurable stage counts or
 adaptive-pooling options.

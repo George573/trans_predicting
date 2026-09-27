@@ -94,7 +94,15 @@ def train(
 
 def load_model(path, device="cpu"):
     payload = torch.load(path, map_location=device, weights_only=True)
-    model = ForecastNetwork(payload["scale"]).to(device)
+    if payload.get("architecture") == "patch":
+        from .patch_model import PatchForecastNetwork
+        model = PatchForecastNetwork(**payload["config"]).to(device)
+    elif payload.get("architecture") == "cnn":
+        model = ForecastNetwork(**payload["config"]).to(device)
+    elif "architecture" in payload:
+        raise ValueError(f"Unknown checkpoint architecture: {payload['architecture']}")
+    else:
+        model = ForecastNetwork(payload["scale"]).to(device)
     model.load_state_dict(payload["model"])
     model.eval()
     return model

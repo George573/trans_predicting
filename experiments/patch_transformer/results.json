@@ -1,0 +1,100 @@
+{
+  "validation_cutoff": "2025-09-01",
+  "validation_end": "2025-10-31",
+  "horizon": 61,
+  "winner": "patch_cnn_blend_0.75",
+  "recipe": {
+    "patch_123": 0.75,
+    "cnn_67": 0.25
+  },
+  "scores_28d": {
+    "seasonal_2w": {
+      "wape": 0.186688427384854,
+      "score": 0.813311572615146,
+      "full_grid_score": 0.813311572615146
+    },
+    "seasonal_4w": {
+      "wape": 0.20653215916821704,
+      "score": 0.793467840831783,
+      "full_grid_score": 0.793467840831783
+    },
+    "seasonal_8w": {
+      "wape": 0.2394442392442311,
+      "score": 0.7605557607557689,
+      "full_grid_score": 0.7605557607557689
+    },
+    "cnn_67": {
+      "wape": 0.18254730269110753,
+      "score": 0.8174526973088925,
+      "full_grid_score": 0.8174526973088925
+    },
+    "patch_67": {
+      "wape": 0.19536102038906297,
+      "score": 0.804638979610937,
+      "full_grid_score": 0.804638979610937
+    },
+    "patch_123": {
+      "wape": 0.16601556761525293,
+      "score": 0.8339844323847471,
+      "full_grid_score": 0.8339844323847471
+    },
+    "patch_ensemble": {
+      "wape": 0.175984680805084,
+      "score": 0.824015319194916,
+      "full_grid_score": 0.824015319194916
+    },
+    "patch_blend_0.25": {
+      "wape": 0.182398293364142,
+      "score": 0.817601706635858,
+      "full_grid_score": 0.817601706635858
+    },
+    "patch_blend_0.5": {
+      "wape": 0.17909980922778945,
+      "score": 0.8209001907722105,
+      "full_grid_score": 0.8209001907722105
+    },
+    "patch_blend_0.75": {
+      "wape": 0.17699913397617142,
+      "score": 0.8230008660238286,
+      "full_grid_score": 0.8230008660238286
+    },
+    "patch_cnn_blend_0.25": {
+      "wape": 0.17206244107059393,
+      "score": 0.827937558929406,
+      "full_grid_score": 0.827937558929406
+    },
+    "patch_cnn_blend_0.5": {
+      "wape": 0.16535392672399585,
+      "score": 0.8346460732760042,
+      "full_grid_score": 0.8346460732760042
+    },
+    "patch_cnn_blend_0.75": {
+      "wape": 0.16343030108503198,
+      "score": 0.836569698914968,
+      "full_grid_score": 0.836569698914968
+    }
+  },
+  "scores_14d": {
+    "seasonal_2w": 0.813311572615146,
+    "seasonal_4w": 0.793467840831783,
+    "seasonal_8w": 0.7605557607557689,
+    "patch_67": 0.8067362959859474,
+    "patch_123": 0.80412821615488,
+    "patch_ensemble": 0.8061346684822961,
+    "patch_blend_0.25": 0.8120654173136086,
+    "patch_blend_0.5": 0.8104730611565658,
+    "patch_blend_0.75": 0.8084999432278224
+  },
+  "selected_epochs": {
+    "cnn_67": 7,
+    "patch_67": 8,
+    "patch_123": 7
+  },
+  "torch_version": "2.14.0+cpu",
+  "data_sha256": {
+    "dataset/labels/labels_day_train.csv": "20a61009b4ee00327784c6fa888109609fd3a1905ea3a8509b36964dd9baced7",
+    "dataset/labels/labels_day_test.csv": "37479acea3e319ac613d72df7217bbe57b66af49644e538139174fd534ce2347",
+    "dataset/parking_events_hourly.csv": "1c7eeae41156026518b7bc80e4a7bcb62d05ba1eb91073b01105c17d53fb1d4a"
+  },
+  "note": "Checkpoint/architecture/blend selection uses this validation period; hidden competition score is unavailable."
+}

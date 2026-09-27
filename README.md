@@ -1,5 +1,22 @@
 # Tram ridership forecasting
 
+See [the new architecture documentation](docs/patch_transformer.md) for the model
+graph, tensor shapes, seasonal residual head, recursive inference, reproduction
+steps and limitations. The user reported only **+0.003** hidden-score improvement;
+the exact score and comparison submission were not provided.
+
+**Latest forecast:** [Autoregression experiment](experiments/autoregression/README.md)
+selects a 50/50 direct Transformer–recursive CNN blend across two 61-day backtests.
+Its pooled WAPE-score is 0.8432 versus 0.8369 for the previous direct blend;
+September–October improves from 0.8366 to 0.8543, with a lower July–August score.
+The new submission is `outputs/autoregression_selected/submission.csv`.
+
+**New architecture experiment:** [Seasonal patch Transformer](experiments/patch_transformer/README.md)
+includes a runnable 61-day fixed-cutoff comparison, checkpoint selection, final
+refit and submission generation. The selected Transformer/CNN blend reached
+0.8366 validation WAPE-score versus 0.8175 for the retrained CNN. See the experiment
+report for commands, limitations and saved artifacts.
+
 A boarding-only PyTorch CNN that encodes a route's hourly history once and predicts
 24 boarding counts for each requested future day. Calendar features, route identity
 and forecast lead condition the predictions. The model uses 14 days of history and the

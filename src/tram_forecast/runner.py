@@ -33,11 +33,14 @@ class InferenceRunner:
 
     @torch.inference_mode()
     def apply_context(self, boardings: Boardings, route: int, cutoff: date) -> ForecastContext:
-        """Encode the 336 hours immediately before cutoff, without future labels."""
+        """Encode the model's history window before cutoff, without future labels."""
         if route not in ROUTES or route not in boardings.routes:
             raise ValueError(f"Unsupported route: {route}")
         device = next(self.model.parameters()).device
-        inputs = history_inputs(boardings, route, cutoff, history_days=14)
+        inputs = history_inputs(
+            boardings, route, cutoff,
+            history_days=getattr(self.model, "history_days", 14),
+        )
         history = {
             name: torch.as_tensor(values[None], dtype=torch.float32, device=device)
             for name, values in inputs.items()
