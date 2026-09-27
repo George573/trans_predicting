@@ -315,7 +315,7 @@ func TestLimitsAndErrors(t *testing.T) {
 		{"granularity", with(dayBody(), "granularity", "week"), 400, "bad_request", "granularity"},
 		{"rain value", dayBody(map[string]any{"id": "c1", "type": "rain", "value": 9}), 400, "bad_request", "conditions[0].value"},
 		{"unknown model", with(dayBody(), "model", "mlp"), 400, "bad_request", "model"},
-		{"cnn domain", with(dayBody(), "model", "cnn", "from", "2026-01-10", "to", "2026-01-10"), 400, "out_of_domain", "from"},
+		{"cnn domain", with(dayBody(), "model", "cnn", "from", "2026-05-01", "to", "2026-05-01"), 400, "out_of_domain", "from"},
 		{"trailing spaces", append(must(json.Marshal(dayBody())), bytes.Repeat([]byte(" "), 3<<20)...), 413, "bad_request", ""},
 		{"trailing garbage", append(must(json.Marshal(dayBody())), []byte("garbage")...), 400, "bad_request", ""},
 	}

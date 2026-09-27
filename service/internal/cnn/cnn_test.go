@@ -37,7 +37,7 @@ func TestReferenceGridMatchesTorch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Rows != 14640 {
+	if c.Rows != 43440 {
 		t.Fatalf("checked %d rows", c.Rows)
 	}
 	t.Logf("max |raw| %.3g, max |final| %.3g", c.MaxRaw, c.MaxFinal)
@@ -58,8 +58,8 @@ func TestReferenceGridMatchesTorch(t *testing.T) {
 }
 
 func TestOutsideContextHorizonFails(t *testing.T) {
-	if _, err := engine.Grid([]int{7}, time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC), 1); err == nil {
-		t.Fatal("CNN answered outside its 61 days")
+	if _, err := engine.Grid([]int{7}, time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), 1); err == nil {
+		t.Fatal("CNN answered after 2026-04-30")
 	}
 }
 

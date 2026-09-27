@@ -29,6 +29,7 @@ type Net struct {
 	OutputBias    []float64     `json:"output_bias"`
 	Inputs        [][][]float64 `json:"inputs"`
 	UsualInputs   [][][]float64 `json:"usual_inputs"`
+	Recursive     Recursive     `json:"recursive"`
 	cutoff        time.Time
 }
 
@@ -46,6 +47,10 @@ func Load(dir string) (*Net, error) {
 	}
 	if err := n.check(); err != nil {
 		return nil, fmt.Errorf("head.json: %w", err)
+	}
+	for r := range n.Routes {
+		n.Inputs[r] = append(n.Inputs[r], n.Recursive.Inputs[r]...)
+		n.UsualInputs[r] = append(n.UsualInputs[r], n.Recursive.UsualInputs[r]...)
 	}
 	return n, nil
 }
@@ -81,7 +86,11 @@ func (n *Net) Explain(c features.Cell, hour int) ([]features.Feature, float64, e
 	for i, v := range n.Inputs[r][d] {
 		out = append(out, features.Feature{Name: n.Features[i], Kind: "float", Value: v})
 	}
-	out = append(out, features.Feature{Name: n.Features[len(n.Features)-1], Kind: "float", Value: float64(d + 1)})
+	lead := d + 1
+	if d >= n.Days {
+		lead = 1
+	}
+	out = append(out, features.Feature{Name: n.Features[len(n.Features)-1], Kind: "float", Value: float64(lead)})
 	raw, err := n.Predict([]features.Cell{c}, false)
 	if err != nil {
 		return nil, 0, err
@@ -99,16 +108,19 @@ func (n *Net) index(c features.Cell) (int, int, error) {
 		return 0, 0, fmt.Errorf("CNN не прогнозирует маршрут %d", c.Route)
 	}
 	d := int(c.Date.Sub(n.cutoff).Hours() / 24)
-	if d < 0 || d >= n.Days {
-		return 0, 0, fmt.Errorf("CNN прогнозирует %d суток от %s, запрошено %s", n.Days, n.Cutoff, c.Date.Format(time.DateOnly))
+	if d < 0 || d >= n.Days+n.Recursive.Days {
+		return 0, 0, fmt.Errorf("CNN прогнозирует %d суток от %s, запрошено %s", n.Days+n.Recursive.Days, n.Cutoff, c.Date.Format(time.DateOnly))
 	}
 	return r, d, nil
 }
 
 func (n *Net) day(r, d int, in, h1, h2, out []float64) {
-	lead := float64(d) / 60
+	base, lead := n.HiddenBase[r], float64(d)/60
+	if d >= n.Days {
+		base, lead = n.Recursive.HiddenBase[r][d-n.Days], 0
+	}
 	for j, w := range n.HiddenRequest {
-		s := n.HiddenBase[r][j] + w[len(in)]*lead
+		s := base[j] + w[len(in)]*lead
 		for k, v := range in {
 			s += w[k] * v
 		}
@@ -147,9 +159,10 @@ func (n *Net) check() error {
 	rows := func(m [][]float64, count, width int) bool {
 		return len(m) == count && !slices.ContainsFunc(m, func(v []float64) bool { return len(v) != width })
 	}
-	cube := func(m [][][]float64) bool {
-		return len(m) == len(n.Routes) && !slices.ContainsFunc(m, func(v [][]float64) bool { return !rows(v, n.Days, k) })
+	cube := func(m [][][]float64, days, width int) bool {
+		return len(m) == len(n.Routes) && !slices.ContainsFunc(m, func(v [][]float64) bool { return !rows(v, days, width) })
 	}
+	rec := n.Recursive
 	switch {
 	case w == 0 || k < 1:
 		return bad("нет скрытого слоя или входных признаков")
@@ -163,12 +176,28 @@ func (n *Net) check() error {
 		return bad("output_weight")
 	case len(n.OutputBias) != 24:
 		return bad("output_bias")
-	case !cube(n.Inputs):
+	case !cube(n.Inputs, n.Days, k):
 		return bad("inputs")
-	case !cube(n.UsualInputs):
+	case !cube(n.UsualInputs, n.Days, k):
 		return bad("usual_inputs")
+	case rec.From != n.cutoff.AddDate(0, 0, n.Days).Format(time.DateOnly):
+		return fmt.Errorf("recursive.from %q не следует за прямым прогнозом", rec.From)
+	case rec.Days < 0 || !cube(rec.HiddenBase, rec.Days, w):
+		return bad("recursive.hidden_base")
+	case !cube(rec.Inputs, rec.Days, k):
+		return bad("recursive.inputs")
+	case !cube(rec.UsualInputs, rec.Days, k):
+		return bad("recursive.usual_inputs")
 	case n.Scale <= 0:
 		return bad("scale")
 	}
 	return nil
+}
+
+type Recursive struct {
+	From        string        `json:"from"`
+	Days        int           `json:"days"`
+	HiddenBase  [][][]float64 `json:"hidden_base"`
+	Inputs      [][][]float64 `json:"inputs"`
+	UsualInputs [][][]float64 `json:"usual_inputs"`
 }
