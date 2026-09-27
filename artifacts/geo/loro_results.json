@@ -1,0 +1,1738 @@
+{
+  "config": {
+    "routes": [
+      1,
+      7,
+      11,
+      12,
+      17,
+      25,
+      26,
+      28,
+      50
+    ],
+    "eval": [
+      "2025-09-01",
+      "2025-10-31"
+    ],
+    "declared": [
+      "n_metro_transfers",
+      "length_km",
+      "n_residential_500m"
+    ],
+    "ridge_lambda": 1.0,
+    "half_life_days": 60.0,
+    "n_permutations": 200,
+    "n_bootstrap": 1000,
+    "seed": 0
+  },
+  "level_loo": [
+    {
+      "features": "shared_track_km",
+      "median_abs_error_pct": 10.5,
+      "max_abs_error_pct": 230.6
+    },
+    {
+      "features": "n_residential_500m",
+      "median_abs_error_pct": 20.9,
+      "max_abs_error_pct": 142.7
+    },
+    {
+      "features": "n_routes_sharing",
+      "median_abs_error_pct": 21.5,
+      "max_abs_error_pct": 264.2
+    },
+    {
+      "features": "n_bus_stops_300m",
+      "median_abs_error_pct": 22.5,
+      "max_abs_error_pct": 159.1
+    },
+    {
+      "features": "n_education_500m",
+      "median_abs_error_pct": 25.4,
+      "max_abs_error_pct": 126.0
+    },
+    {
+      "features": "n_stops",
+      "median_abs_error_pct": 26.7,
+      "max_abs_error_pct": 161.3
+    },
+    {
+      "features": "length_km",
+      "median_abs_error_pct": 28.6,
+      "max_abs_error_pct": 150.2
+    },
+    {
+      "features": "n_platforms_tagged",
+      "median_abs_error_pct": 30.0,
+      "max_abs_error_pct": 133.2
+    },
+    {
+      "features": "ЗАЯВЛЕНО: n_metro_transfers + length_km + n_residential_500m",
+      "median_abs_error_pct": 30.6,
+      "max_abs_error_pct": 170.8
+    },
+    {
+      "features": "n_shop_500m",
+      "median_abs_error_pct": 31.5,
+      "max_abs_error_pct": 165.0
+    },
+    {
+      "features": "n_metro_transfers",
+      "median_abs_error_pct": 36.8,
+      "max_abs_error_pct": 212.9
+    },
+    {
+      "features": "без признаков (среднее по остальным)",
+      "median_abs_error_pct": 39.7,
+      "max_abs_error_pct": 227.1
+    },
+    {
+      "features": "dist_center_km",
+      "median_abs_error_pct": 39.8,
+      "max_abs_error_pct": 229.7
+    },
+    {
+      "features": "share_within_10km",
+      "median_abs_error_pct": 39.8,
+      "max_abs_error_pct": 266.9
+    },
+    {
+      "features": "n_rail_transfers",
+      "median_abs_error_pct": 40.0,
+      "max_abs_error_pct": 227.1
+    },
+    {
+      "features": "stop_spacing_m",
+      "median_abs_error_pct": 40.1,
+      "max_abs_error_pct": 227.2
+    },
+    {
+      "features": "shared_share",
+      "median_abs_error_pct": 41.6,
+      "max_abs_error_pct": 313.5
+    },
+    {
+      "features": "min_dist_center_km",
+      "median_abs_error_pct": 41.8,
+      "max_abs_error_pct": 226.8
+    },
+    {
+      "features": "share_within_5km",
+      "median_abs_error_pct": 41.8,
+      "max_abs_error_pct": 232.3
+    },
+    {
+      "features": "n_metro_transfers_500m",
+      "median_abs_error_pct": 42.1,
+      "max_abs_error_pct": 210.2
+    }
+  ],
+  "permutation_best_feature": {
+    "winner": "shared_track_km",
+    "real_median_error_pct": 10.5,
+    "null_median_pct": 28.7,
+    "null_p05_pct": 13.8,
+    "beaten_share": 0.985
+  },
+  "permutation": {
+    "A": {
+      "real": 0.584,
+      "null_median": 0.4345,
+      "null_p95": 0.6155,
+      "beaten_share": 0.925
+    },
+    "B": {
+      "real": 0.5769,
+      "null_median": 0.4352,
+      "null_p95": 0.5797,
+      "beaten_share": 0.94
+    }
+  },
+  "intervals": {
+    "A": [
+      {
+        "route": 1,
+        "cell_coverage_pct": 89.8,
+        "total_true": 1136093,
+        "total_lo": 329849,
+        "total_hi": 1737082,
+        "total_inside": true,
+        "width_ratio": 5.27
+      },
+      {
+        "route": 7,
+        "cell_coverage_pct": 95.2,
+        "total_true": 1350573,
+        "total_lo": 607943,
+        "total_hi": 3925169,
+        "total_inside": true,
+        "width_ratio": 6.46
+      },
+      {
+        "route": 11,
+        "cell_coverage_pct": 94.9,
+        "total_true": 1907061,
+        "total_lo": 872222,
+        "total_hi": 5310720,
+        "total_inside": true,
+        "width_ratio": 6.09
+      },
+      {
+        "route": 12,
+        "cell_coverage_pct": 93.4,
+        "total_true": 1983604,
+        "total_lo": 875855,
+        "total_hi": 5333797,
+        "total_inside": true,
+        "width_ratio": 6.09
+      },
+      {
+        "route": 17,
+        "cell_coverage_pct": 6.6,
+        "total_true": 3063025,
+        "total_lo": 433302,
+        "total_hi": 1657542,
+        "total_inside": false,
+        "width_ratio": 3.83
+      },
+      {
+        "route": 25,
+        "cell_coverage_pct": 33.5,
+        "total_true": 464537,
+        "total_lo": 558705,
+        "total_hi": 2218356,
+        "total_inside": false,
+        "width_ratio": 3.97
+      },
+      {
+        "route": 26,
+        "cell_coverage_pct": 93.9,
+        "total_true": 1089964,
+        "total_lo": 464729,
+        "total_hi": 2895454,
+        "total_inside": true,
+        "width_ratio": 6.23
+      },
+      {
+        "route": 28,
+        "cell_coverage_pct": 83.0,
+        "total_true": 602164,
+        "total_lo": 401618,
+        "total_hi": 2016772,
+        "total_inside": true,
+        "width_ratio": 5.02
+      },
+      {
+        "route": 50,
+        "cell_coverage_pct": 71.5,
+        "total_true": 1157460,
+        "total_lo": 393847,
+        "total_hi": 1993083,
+        "total_inside": true,
+        "width_ratio": 5.06
+      }
+    ],
+    "B": [
+      {
+        "route": 1,
+        "cell_coverage_pct": 91.1,
+        "total_true": 1136093,
+        "total_lo": 347415,
+        "total_hi": 1817001,
+        "total_inside": true,
+        "width_ratio": 5.23
+      },
+      {
+        "route": 7,
+        "cell_coverage_pct": 92.8,
+        "total_true": 1350573,
+        "total_lo": 747675,
+        "total_hi": 4910030,
+        "total_inside": true,
+        "width_ratio": 6.57
+      },
+      {
+        "route": 11,
+        "cell_coverage_pct": 94.3,
+        "total_true": 1907061,
+        "total_lo": 922233,
+        "total_hi": 5326999,
+        "total_inside": true,
+        "width_ratio": 5.78
+      },
+      {
+        "route": 12,
+        "cell_coverage_pct": 95.3,
+        "total_true": 1983604,
+        "total_lo": 1014899,
+        "total_hi": 5616362,
+        "total_inside": true,
+        "width_ratio": 5.53
+      },
+      {
+        "route": 17,
+        "cell_coverage_pct": 9.6,
+        "total_true": 3063025,
+        "total_lo": 413704,
+        "total_hi": 1627942,
+        "total_inside": false,
+        "width_ratio": 3.94
+      },
+      {
+        "route": 25,
+        "cell_coverage_pct": 27.4,
+        "total_true": 464537,
+        "total_lo": 610644,
+        "total_hi": 2173969,
+        "total_inside": false,
+        "width_ratio": 3.56
+      },
+      {
+        "route": 26,
+        "cell_coverage_pct": 95.5,
+        "total_true": 1089964,
+        "total_lo": 483095,
+        "total_hi": 2882601,
+        "total_inside": true,
+        "width_ratio": 5.97
+      },
+      {
+        "route": 28,
+        "cell_coverage_pct": 83.1,
+        "total_true": 602164,
+        "total_lo": 391569,
+        "total_hi": 2045280,
+        "total_inside": true,
+        "width_ratio": 5.22
+      },
+      {
+        "route": 50,
+        "cell_coverage_pct": 73.4,
+        "total_true": 1157460,
+        "total_lo": 384719,
+        "total_hi": 2028956,
+        "total_inside": true,
+        "width_ratio": 5.27
+      }
+    ]
+  },
+  "sensitivity": {
+    "A": [
+      {
+        "level_error": "x50",
+        "k": 0.5,
+        "wape_score": 0.4829
+      },
+      {
+        "level_error": "x60",
+        "k": 0.6,
+        "wape_score": 0.5778
+      },
+      {
+        "level_error": "x70",
+        "k": 0.7,
+        "wape_score": 0.6702
+      },
+      {
+        "level_error": "x80",
+        "k": 0.8,
+        "wape_score": 0.7574
+      },
+      {
+        "level_error": "x90",
+        "k": 0.9,
+        "wape_score": 0.8285
+      },
+      {
+        "level_error": "x100",
+        "k": 1.0,
+        "wape_score": 0.8527
+      },
+      {
+        "level_error": "x110",
+        "k": 1.1,
+        "wape_score": 0.8241
+      },
+      {
+        "level_error": "x125",
+        "k": 1.25,
+        "wape_score": 0.7234
+      },
+      {
+        "level_error": "x150",
+        "k": 1.5,
+        "wape_score": 0.4978
+      },
+      {
+        "level_error": "x200",
+        "k": 2.0,
+        "wape_score": 0.0055
+      }
+    ],
+    "B": [
+      {
+        "level_error": "x50",
+        "k": 0.5,
+        "wape_score": 0.5181
+      },
+      {
+        "level_error": "x60",
+        "k": 0.6,
+        "wape_score": 0.6191
+      },
+      {
+        "level_error": "x70",
+        "k": 0.7,
+        "wape_score": 0.7161
+      },
+      {
+        "level_error": "x80",
+        "k": 0.8,
+        "wape_score": 0.8019
+      },
+      {
+        "level_error": "x90",
+        "k": 0.9,
+        "wape_score": 0.851
+      },
+      {
+        "level_error": "x100",
+        "k": 1.0,
+        "wape_score": 0.8374
+      },
+      {
+        "level_error": "x110",
+        "k": 1.1,
+        "wape_score": 0.7782
+      },
+      {
+        "level_error": "x125",
+        "k": 1.25,
+        "wape_score": 0.6466
+      },
+      {
+        "level_error": "x150",
+        "k": 1.5,
+        "wape_score": 0.3896
+      },
+      {
+        "level_error": "x200",
+        "k": 2.0,
+        "wape_score": 0.0
+      }
+    ]
+  },
+  "summary": [
+    {
+      "setup": "A",
+      "config": "floor_mean_level",
+      "wape_score": 0.5051,
+      "level_bias": -0.0044,
+      "median_level_error_pct": 32.3,
+      "shape_wape_score": 0.853,
+      "ci95_lo": 0.4834,
+      "ci95_hi": 0.5228
+    },
+    {
+      "setup": "A",
+      "config": "floor_median_level",
+      "wape_score": 0.5318,
+      "level_bias": -0.1533,
+      "median_level_error_pct": 40.1,
+      "shape_wape_score": 0.853,
+      "ci95_lo": 0.5156,
+      "ci95_hi": 0.5462
+    },
+    {
+      "setup": "A",
+      "config": "geo_level",
+      "wape_score": 0.584,
+      "level_bias": -0.0623,
+      "median_level_error_pct": 23.4,
+      "shape_wape_score": 0.853,
+      "ci95_lo": 0.5748,
+      "ci95_hi": 0.5925
+    },
+    {
+      "setup": "A",
+      "config": "oracle_level",
+      "wape_score": 0.8527,
+      "level_bias": -0.0037,
+      "median_level_error_pct": 0.5,
+      "shape_wape_score": 0.853,
+      "ci95_lo": 0.8369,
+      "ci95_hi": 0.867
+    },
+    {
+      "setup": "A",
+      "config": "geo_catboost_direct",
+      "wape_score": 0.4991,
+      "level_bias": 0.0499,
+      "median_level_error_pct": 34.5,
+      "shape_wape_score": 0.8317,
+      "ci95_lo": 0.4694,
+      "ci95_hi": 0.5219
+    },
+    {
+      "setup": "A",
+      "config": "warm_reference",
+      "wape_score": 0.9231,
+      "level_bias": -0.0046,
+      "median_level_error_pct": 0.7,
+      "shape_wape_score": 0.9231,
+      "ci95_lo": 0.9198,
+      "ci95_hi": 0.9262
+    },
+    {
+      "setup": "B",
+      "config": "floor_mean_level",
+      "wape_score": 0.5055,
+      "level_bias": -0.0127,
+      "median_level_error_pct": 32.3,
+      "shape_wape_score": 0.8538,
+      "ci95_lo": 0.484,
+      "ci95_hi": 0.5244
+    },
+    {
+      "setup": "B",
+      "config": "floor_median_level",
+      "wape_score": 0.5174,
+      "level_bias": -0.1097,
+      "median_level_error_pct": 37.4,
+      "shape_wape_score": 0.8538,
+      "ci95_lo": 0.5007,
+      "ci95_hi": 0.5309
+    },
+    {
+      "setup": "B",
+      "config": "geo_level",
+      "wape_score": 0.5769,
+      "level_bias": -0.0684,
+      "median_level_error_pct": 25.2,
+      "shape_wape_score": 0.8538,
+      "ci95_lo": 0.5651,
+      "ci95_hi": 0.5883
+    },
+    {
+      "setup": "B",
+      "config": "oracle_level",
+      "wape_score": 0.8374,
+      "level_bias": 0.0705,
+      "median_level_error_pct": 6.8,
+      "shape_wape_score": 0.8538,
+      "ci95_lo": 0.8231,
+      "ci95_hi": 0.8495
+    },
+    {
+      "setup": "B",
+      "config": "geo_catboost_direct",
+      "wape_score": 0.5144,
+      "level_bias": 0.0759,
+      "median_level_error_pct": 44.9,
+      "shape_wape_score": 0.8385,
+      "ci95_lo": 0.4891,
+      "ci95_hi": 0.5356
+    },
+    {
+      "setup": "B",
+      "config": "warm_reference",
+      "wape_score": 0.8869,
+      "level_bias": -0.0061,
+      "median_level_error_pct": 3.8,
+      "shape_wape_score": 0.8893,
+      "ci95_lo": 0.8746,
+      "ci95_hi": 0.8969
+    }
+  ],
+  "per_route": [
+    {
+      "setup": "A",
+      "config": "floor_mean_level",
+      "route": 1,
+      "y_sum": 1136093,
+      "level_true": 776.0,
+      "level_pred": 992.0,
+      "wape_score": 0.7235,
+      "level_bias": 0.2718,
+      "shape_wape_score": 0.8764
+    },
+    {
+      "setup": "A",
+      "config": "floor_mean_level",
+      "route": 7,
+      "y_sum": 1350573,
+      "level_true": 922.5,
+      "level_pred": 973.7,
+      "wape_score": 0.8414,
+      "level_bias": 0.0499,
+      "shape_wape_score": 0.8395
+    },
+    {
+      "setup": "A",
+      "config": "floor_mean_level",
+      "route": 11,
+      "y_sum": 1907061,
+      "level_true": 1302.6,
+      "level_pred": 926.2,
+      "wape_score": 0.7049,
+      "level_bias": -0.2915,
+      "shape_wape_score": 0.8732
+    },
+    {
+      "setup": "A",
+      "config": "floor_mean_level",
+      "route": 12,
+      "y_sum": 1983604,
+      "level_true": 1354.9,
+      "level_pred": 919.6,
+      "wape_score": 0.6759,
+      "level_bias": -0.3227,
+      "shape_wape_score": 0.8905
+    },
+    {
+      "setup": "A",
+      "config": "floor_mean_level",
+      "route": 17,
+      "y_sum": 3063025,
+      "level_true": 2092.2,
+      "level_pred": 827.5,
+      "wape_score": 0.3951,
+      "level_bias": -0.6049,
+      "shape_wape_score": 0.8813
+    },
+    {
+      "setup": "A",
+      "config": "floor_mean_level",
+      "route": 25,
+      "y_sum": 464537,
+      "level_true": 317.3,
+      "level_pred": 1049.3,
+      "wape_score": 0.0,
+      "level_bias": 2.3003,
+      "shape_wape_score": 0.7925
+    },
+    {
+      "setup": "A",
+      "config": "floor_mean_level",
+      "route": 26,
+      "y_sum": 1089964,
+      "level_true": 744.5,
+      "level_pred": 995.9,
+      "wape_score": 0.6677,
+      "level_bias": 0.3309,
+      "shape_wape_score": 0.9009
+    },
+    {
+      "setup": "A",
+      "config": "floor_mean_level",
+      "route": 28,
+      "y_sum": 602164,
+      "level_true": 411.3,
+      "level_pred": 1037.6,
+      "wape_score": 0.0,
+      "level_bias": 1.5071,
+      "shape_wape_score": 0.8516
+    },
+    {
+      "setup": "A",
+      "config": "floor_mean_level",
+      "route": 50,
+      "y_sum": 1157460,
+      "level_true": 790.6,
+      "level_pred": 990.2,
+      "wape_score": 0.6661,
+      "level_bias": 0.2414,
+      "shape_wape_score": 0.6529
+    },
+    {
+      "setup": "A",
+      "config": "floor_median_level",
+      "route": 1,
+      "y_sum": 1136093,
+      "level_true": 776.0,
+      "level_pred": 856.6,
+      "wape_score": 0.8583,
+      "level_bias": 0.0982,
+      "shape_wape_score": 0.8764
+    },
+    {
+      "setup": "A",
+      "config": "floor_median_level",
+      "route": 7,
+      "y_sum": 1350573,
+      "level_true": 922.5,
+      "level_pred": 783.3,
+      "wape_score": 0.774,
+      "level_bias": -0.1554,
+      "shape_wape_score": 0.8395
+    },
+    {
+      "setup": "A",
+      "config": "floor_median_level",
+      "route": 11,
+      "y_sum": 1907061,
+      "level_true": 1302.6,
+      "level_pred": 783.3,
+      "wape_score": 0.5981,
+      "level_bias": -0.4008,
+      "shape_wape_score": 0.8732
+    },
+    {
+      "setup": "A",
+      "config": "floor_median_level",
+      "route": 12,
+      "y_sum": 1983604,
+      "level_true": 1354.9,
+      "level_pred": 783.3,
+      "wape_score": 0.5765,
+      "level_bias": -0.4231,
+      "shape_wape_score": 0.8905
+    },
+    {
+      "setup": "A",
+      "config": "floor_median_level",
+      "route": 17,
+      "y_sum": 3063025,
+      "level_true": 2092.2,
+      "level_pred": 783.3,
+      "wape_score": 0.374,
+      "level_bias": -0.626,
+      "shape_wape_score": 0.8813
+    },
+    {
+      "setup": "A",
+      "config": "floor_median_level",
+      "route": 25,
+      "y_sum": 464537,
+      "level_true": 317.3,
+      "level_pred": 856.6,
+      "wape_score": 0.0,
+      "level_bias": 1.694,
+      "shape_wape_score": 0.7925
+    },
+    {
+      "setup": "A",
+      "config": "floor_median_level",
+      "route": 26,
+      "y_sum": 1089964,
+      "level_true": 744.5,
+      "level_pred": 856.6,
+      "wape_score": 0.8415,
+      "level_bias": 0.1447,
+      "shape_wape_score": 0.9009
+    },
+    {
+      "setup": "A",
+      "config": "floor_median_level",
+      "route": 28,
+      "y_sum": 602164,
+      "level_true": 411.3,
+      "level_pred": 856.6,
+      "wape_score": 0.0,
+      "level_bias": 1.0697,
+      "shape_wape_score": 0.8516
+    },
+    {
+      "setup": "A",
+      "config": "floor_median_level",
+      "route": 50,
+      "y_sum": 1157460,
+      "level_true": 790.6,
+      "level_pred": 849.3,
+      "wape_score": 0.6734,
+      "level_bias": 0.0647,
+      "shape_wape_score": 0.6529
+    },
+    {
+      "setup": "A",
+      "config": "geo_level",
+      "route": 1,
+      "y_sum": 1136093,
+      "level_true": 776.0,
+      "level_pred": 536.6,
+      "wape_score": 0.6735,
+      "level_bias": -0.3121,
+      "shape_wape_score": 0.8764
+    },
+    {
+      "setup": "A",
+      "config": "geo_level",
+      "route": 7,
+      "y_sum": 1350573,
+      "level_true": 922.5,
+      "level_pred": 1071.6,
+      "wape_score": 0.8037,
+      "level_bias": 0.1555,
+      "shape_wape_score": 0.8395
+    },
+    {
+      "setup": "A",
+      "config": "geo_level",
+      "route": 11,
+      "y_sum": 1907061,
+      "level_true": 1302.6,
+      "level_pred": 1517.7,
+      "wape_score": 0.7887,
+      "level_bias": 0.161,
+      "shape_wape_score": 0.8732
+    },
+    {
+      "setup": "A",
+      "config": "geo_level",
+      "route": 12,
+      "y_sum": 1983604,
+      "level_true": 1354.9,
+      "level_pred": 1534.4,
+      "wape_score": 0.8217,
+      "level_bias": 0.13,
+      "shape_wape_score": 0.8905
+    },
+    {
+      "setup": "A",
+      "config": "geo_level",
+      "route": 17,
+      "y_sum": 3063025,
+      "level_true": 2092.2,
+      "level_pred": 628.5,
+      "wape_score": 0.3001,
+      "level_bias": -0.6999,
+      "shape_wape_score": 0.8813
+    },
+    {
+      "setup": "A",
+      "config": "geo_level",
+      "route": 25,
+      "y_sum": 464537,
+      "level_true": 317.3,
+      "level_pred": 783.9,
+      "wape_score": 0.0,
+      "level_bias": 1.4655,
+      "shape_wape_score": 0.7925
+    },
+    {
+      "setup": "A",
+      "config": "geo_level",
+      "route": 26,
+      "y_sum": 1089964,
+      "level_true": 744.5,
+      "level_pred": 860.7,
+      "wape_score": 0.8371,
+      "level_bias": 0.1502,
+      "shape_wape_score": 0.9009
+    },
+    {
+      "setup": "A",
+      "config": "geo_level",
+      "route": 28,
+      "y_sum": 602164,
+      "level_true": 411.3,
+      "level_pred": 658.1,
+      "wape_score": 0.4092,
+      "level_bias": 0.5901,
+      "shape_wape_score": 0.8516
+    },
+    {
+      "setup": "A",
+      "config": "geo_level",
+      "route": 50,
+      "y_sum": 1157460,
+      "level_true": 790.6,
+      "level_pred": 611.1,
+      "wape_score": 0.5208,
+      "level_bias": -0.2338,
+      "shape_wape_score": 0.6529
+    },
+    {
+      "setup": "A",
+      "config": "oracle_level",
+      "route": 1,
+      "y_sum": 1136093,
+      "level_true": 776.0,
+      "level_pred": 776.0,
+      "wape_score": 0.8756,
+      "level_bias": -0.0051,
+      "shape_wape_score": 0.8764
+    },
+    {
+      "setup": "A",
+      "config": "oracle_level",
+      "route": 7,
+      "y_sum": 1350573,
+      "level_true": 922.5,
+      "level_pred": 922.5,
+      "wape_score": 0.8388,
+      "level_bias": -0.0053,
+      "shape_wape_score": 0.8395
+    },
+    {
+      "setup": "A",
+      "config": "oracle_level",
+      "route": 11,
+      "y_sum": 1907061,
+      "level_true": 1302.6,
+      "level_pred": 1302.6,
+      "wape_score": 0.8739,
+      "level_bias": -0.0036,
+      "shape_wape_score": 0.8732
+    },
+    {
+      "setup": "A",
+      "config": "oracle_level",
+      "route": 12,
+      "y_sum": 1983604,
+      "level_true": 1354.9,
+      "level_pred": 1354.9,
+      "wape_score": 0.8908,
+      "level_bias": -0.0022,
+      "shape_wape_score": 0.8905
+    },
+    {
+      "setup": "A",
+      "config": "oracle_level",
+      "route": 17,
+      "y_sum": 3063025,
+      "level_true": 2092.2,
+      "level_pred": 2092.2,
+      "wape_score": 0.8817,
+      "level_bias": -0.001,
+      "shape_wape_score": 0.8813
+    },
+    {
+      "setup": "A",
+      "config": "oracle_level",
+      "route": 25,
+      "y_sum": 464537,
+      "level_true": 317.3,
+      "level_pred": 317.3,
+      "wape_score": 0.7928,
+      "level_bias": -0.002,
+      "shape_wape_score": 0.7925
+    },
+    {
+      "setup": "A",
+      "config": "oracle_level",
+      "route": 26,
+      "y_sum": 1089964,
+      "level_true": 744.5,
+      "level_pred": 744.5,
+      "wape_score": 0.9007,
+      "level_bias": -0.0051,
+      "shape_wape_score": 0.9009
+    },
+    {
+      "setup": "A",
+      "config": "oracle_level",
+      "route": 28,
+      "y_sum": 602164,
+      "level_true": 411.3,
+      "level_pred": 411.3,
+      "wape_score": 0.8511,
+      "level_bias": -0.0061,
+      "shape_wape_score": 0.8516
+    },
+    {
+      "setup": "A",
+      "config": "oracle_level",
+      "route": 50,
+      "y_sum": 1157460,
+      "level_true": 790.6,
+      "level_pred": 790.6,
+      "wape_score": 0.6493,
+      "level_bias": -0.0088,
+      "shape_wape_score": 0.6529
+    },
+    {
+      "setup": "A",
+      "config": "geo_catboost_direct",
+      "route": 1,
+      "y_sum": 1136093,
+      "level_true": 776.0,
+      "level_pred": null,
+      "wape_score": 0.7759,
+      "level_bias": -0.0759,
+      "shape_wape_score": 0.7963
+    },
+    {
+      "setup": "A",
+      "config": "geo_catboost_direct",
+      "route": 7,
+      "y_sum": 1350573,
+      "level_true": 922.5,
+      "level_pred": null,
+      "wape_score": 0.8412,
+      "level_bias": -0.0743,
+      "shape_wape_score": 0.8443
+    },
+    {
+      "setup": "A",
+      "config": "geo_catboost_direct",
+      "route": 11,
+      "y_sum": 1907061,
+      "level_true": 1302.6,
+      "level_pred": null,
+      "wape_score": 0.8874,
+      "level_bias": -0.0326,
+      "shape_wape_score": 0.8936
+    },
+    {
+      "setup": "A",
+      "config": "geo_catboost_direct",
+      "route": 12,
+      "y_sum": 1983604,
+      "level_true": 1354.9,
+      "level_pred": null,
+      "wape_score": 0.6874,
+      "level_bias": -0.3043,
+      "shape_wape_score": 0.8055
+    },
+    {
+      "setup": "A",
+      "config": "geo_catboost_direct",
+      "route": 17,
+      "y_sum": 3063025,
+      "level_true": 2092.2,
+      "level_pred": null,
+      "wape_score": 0.4199,
+      "level_bias": -0.5785,
+      "shape_wape_score": 0.8848
+    },
+    {
+      "setup": "A",
+      "config": "geo_catboost_direct",
+      "route": 25,
+      "y_sum": 464537,
+      "level_true": 317.3,
+      "level_pred": null,
+      "wape_score": 0.0,
+      "level_bias": 2.4513,
+      "shape_wape_score": 0.7534
+    },
+    {
+      "setup": "A",
+      "config": "geo_catboost_direct",
+      "route": 26,
+      "y_sum": 1089964,
+      "level_true": 744.5,
+      "level_pred": null,
+      "wape_score": 0.5606,
+      "level_bias": 0.439,
+      "shape_wape_score": 0.8912
+    },
+    {
+      "setup": "A",
+      "config": "geo_catboost_direct",
+      "route": 28,
+      "y_sum": 602164,
+      "level_true": 411.3,
+      "level_pred": null,
+      "wape_score": 0.0,
+      "level_bias": 2.0652,
+      "shape_wape_score": 0.7462
+    },
+    {
+      "setup": "A",
+      "config": "geo_catboost_direct",
+      "route": 50,
+      "y_sum": 1157460,
+      "level_true": 790.6,
+      "level_pred": null,
+      "wape_score": 0.6143,
+      "level_bias": 0.3455,
+      "shape_wape_score": 0.6739
+    },
+    {
+      "setup": "A",
+      "config": "warm_reference",
+      "route": 1,
+      "y_sum": 1136093,
+      "level_true": 776.0,
+      "level_pred": null,
+      "wape_score": 0.9326,
+      "level_bias": -0.0068,
+      "shape_wape_score": 0.9327
+    },
+    {
+      "setup": "A",
+      "config": "warm_reference",
+      "route": 7,
+      "y_sum": 1350573,
+      "level_true": 922.5,
+      "level_pred": null,
+      "wape_score": 0.916,
+      "level_bias": 0.0005,
+      "shape_wape_score": 0.916
+    },
+    {
+      "setup": "A",
+      "config": "warm_reference",
+      "route": 11,
+      "y_sum": 1907061,
+      "level_true": 1302.6,
+      "level_pred": null,
+      "wape_score": 0.9167,
+      "level_bias": -0.0008,
+      "shape_wape_score": 0.9167
+    },
+    {
+      "setup": "A",
+      "config": "warm_reference",
+      "route": 12,
+      "y_sum": 1983604,
+      "level_true": 1354.9,
+      "level_pred": null,
+      "wape_score": 0.9256,
+      "level_bias": -0.002,
+      "shape_wape_score": 0.9256
+    },
+    {
+      "setup": "A",
+      "config": "warm_reference",
+      "route": 17,
+      "y_sum": 3063025,
+      "level_true": 2092.2,
+      "level_pred": null,
+      "wape_score": 0.9492,
+      "level_bias": -0.0057,
+      "shape_wape_score": 0.9496
+    },
+    {
+      "setup": "A",
+      "config": "warm_reference",
+      "route": 25,
+      "y_sum": 464537,
+      "level_true": 317.3,
+      "level_pred": null,
+      "wape_score": 0.8729,
+      "level_bias": -0.0318,
+      "shape_wape_score": 0.8713
+    },
+    {
+      "setup": "A",
+      "config": "warm_reference",
+      "route": 26,
+      "y_sum": 1089964,
+      "level_true": 744.5,
+      "level_pred": null,
+      "wape_score": 0.9297,
+      "level_bias": -0.0114,
+      "shape_wape_score": 0.9296
+    },
+    {
+      "setup": "A",
+      "config": "warm_reference",
+      "route": 28,
+      "y_sum": 602164,
+      "level_true": 411.3,
+      "level_pred": null,
+      "wape_score": 0.8803,
+      "level_bias": 0.0165,
+      "shape_wape_score": 0.88
+    },
+    {
+      "setup": "A",
+      "config": "warm_reference",
+      "route": 50,
+      "y_sum": 1157460,
+      "level_true": 790.6,
+      "level_pred": null,
+      "wape_score": 0.895,
+      "level_bias": -0.0097,
+      "shape_wape_score": 0.895
+    },
+    {
+      "setup": "B",
+      "config": "floor_mean_level",
+      "route": 1,
+      "y_sum": 1136093,
+      "level_true": 776.0,
+      "level_pred": 920.1,
+      "wape_score": 0.7295,
+      "level_bias": 0.2656,
+      "shape_wape_score": 0.8692
+    },
+    {
+      "setup": "B",
+      "config": "floor_mean_level",
+      "route": 7,
+      "y_sum": 1350573,
+      "level_true": 922.5,
+      "level_pred": 895.3,
+      "wape_score": 0.8446,
+      "level_bias": 0.0294,
+      "shape_wape_score": 0.8427
+    },
+    {
+      "setup": "B",
+      "config": "floor_mean_level",
+      "route": 11,
+      "y_sum": 1907061,
+      "level_true": 1302.6,
+      "level_pred": 854.7,
+      "wape_score": 0.7013,
+      "level_bias": -0.2957,
+      "shape_wape_score": 0.8855
+    },
+    {
+      "setup": "B",
+      "config": "floor_mean_level",
+      "route": 12,
+      "y_sum": 1983604,
+      "level_true": 1354.9,
+      "level_pred": 847.8,
+      "wape_score": 0.6671,
+      "level_bias": -0.3316,
+      "shape_wape_score": 0.8875
+    },
+    {
+      "setup": "B",
+      "config": "floor_mean_level",
+      "route": 17,
+      "y_sum": 3063025,
+      "level_true": 2092.2,
+      "level_pred": 769.0,
+      "wape_score": 0.3961,
+      "level_bias": -0.6039,
+      "shape_wape_score": 0.8906
+    },
+    {
+      "setup": "B",
+      "config": "floor_mean_level",
+      "route": 25,
+      "y_sum": 464537,
+      "level_true": 317.3,
+      "level_pred": 972.8,
+      "wape_score": 0.0,
+      "level_bias": 2.2932,
+      "shape_wape_score": 0.7881
+    },
+    {
+      "setup": "B",
+      "config": "floor_mean_level",
+      "route": 26,
+      "y_sum": 1089964,
+      "level_true": 744.5,
+      "level_pred": 924.3,
+      "wape_score": 0.6753,
+      "level_bias": 0.3234,
+      "shape_wape_score": 0.8923
+    },
+    {
+      "setup": "B",
+      "config": "floor_mean_level",
+      "route": 28,
+      "y_sum": 602164,
+      "level_true": 411.3,
+      "level_pred": 958.9,
+      "wape_score": 0.0,
+      "level_bias": 1.4893,
+      "shape_wape_score": 0.8407
+    },
+    {
+      "setup": "B",
+      "config": "floor_mean_level",
+      "route": 50,
+      "y_sum": 1157460,
+      "level_true": 790.6,
+      "level_pred": 901.1,
+      "wape_score": 0.6594,
+      "level_bias": 0.2184,
+      "shape_wape_score": 0.6417
+    },
+    {
+      "setup": "B",
+      "config": "floor_median_level",
+      "route": 1,
+      "y_sum": 1136093,
+      "level_true": 776.0,
+      "level_pred": 858.4,
+      "wape_score": 0.8015,
+      "level_bias": 0.1809,
+      "shape_wape_score": 0.8692
+    },
+    {
+      "setup": "B",
+      "config": "floor_median_level",
+      "route": 7,
+      "y_sum": 1350573,
+      "level_true": 922.5,
+      "level_pred": 759.2,
+      "wape_score": 0.796,
+      "level_bias": -0.127,
+      "shape_wape_score": 0.8427
+    },
+    {
+      "setup": "B",
+      "config": "floor_median_level",
+      "route": 11,
+      "y_sum": 1907061,
+      "level_true": 1302.6,
+      "level_pred": 759.2,
+      "wape_score": 0.6243,
+      "level_bias": -0.3744,
+      "shape_wape_score": 0.8855
+    },
+    {
+      "setup": "B",
+      "config": "floor_median_level",
+      "route": 12,
+      "y_sum": 1983604,
+      "level_true": 1354.9,
+      "level_pred": 759.2,
+      "wape_score": 0.598,
+      "level_bias": -0.4014,
+      "shape_wape_score": 0.8875
+    },
+    {
+      "setup": "B",
+      "config": "floor_median_level",
+      "route": 17,
+      "y_sum": 3063025,
+      "level_true": 2092.2,
+      "level_pred": 759.2,
+      "wape_score": 0.3911,
+      "level_bias": -0.6089,
+      "shape_wape_score": 0.8906
+    },
+    {
+      "setup": "B",
+      "config": "floor_median_level",
+      "route": 25,
+      "y_sum": 464537,
+      "level_true": 317.3,
+      "level_pred": 858.4,
+      "wape_score": 0.0,
+      "level_bias": 1.9059,
+      "shape_wape_score": 0.7881
+    },
+    {
+      "setup": "B",
+      "config": "floor_median_level",
+      "route": 26,
+      "y_sum": 1089964,
+      "level_true": 744.5,
+      "level_pred": 858.4,
+      "wape_score": 0.7656,
+      "level_bias": 0.2292,
+      "shape_wape_score": 0.8923
+    },
+    {
+      "setup": "B",
+      "config": "floor_median_level",
+      "route": 28,
+      "y_sum": 602164,
+      "level_true": 411.3,
+      "level_pred": 858.4,
+      "wape_score": 0.0,
+      "level_bias": 1.2285,
+      "shape_wape_score": 0.8407
+    },
+    {
+      "setup": "B",
+      "config": "floor_median_level",
+      "route": 50,
+      "y_sum": 1157460,
+      "level_true": 790.6,
+      "level_pred": 782.7,
+      "wape_score": 0.6592,
+      "level_bias": 0.0583,
+      "shape_wape_score": 0.6417
+    },
+    {
+      "setup": "B",
+      "config": "geo_level",
+      "route": 1,
+      "y_sum": 1136093,
+      "level_true": 776.0,
+      "level_pred": 474.6,
+      "wape_score": 0.6396,
+      "level_bias": -0.3472,
+      "shape_wape_score": 0.8692
+    },
+    {
+      "setup": "B",
+      "config": "geo_level",
+      "route": 7,
+      "y_sum": 1350573,
+      "level_true": 922.5,
+      "level_pred": 1088.6,
+      "wape_score": 0.7355,
+      "level_bias": 0.2517,
+      "shape_wape_score": 0.8427
+    },
+    {
+      "setup": "B",
+      "config": "geo_level",
+      "route": 11,
+      "y_sum": 1907061,
+      "level_true": 1302.6,
+      "level_pred": 1363.6,
+      "wape_score": 0.8277,
+      "level_bias": 0.1236,
+      "shape_wape_score": 0.8855
+    },
+    {
+      "setup": "B",
+      "config": "geo_level",
+      "route": 12,
+      "y_sum": 1983604,
+      "level_true": 1354.9,
+      "level_pred": 1495.2,
+      "wape_score": 0.7856,
+      "level_bias": 0.1788,
+      "shape_wape_score": 0.8875
+    },
+    {
+      "setup": "B",
+      "config": "geo_level",
+      "route": 17,
+      "y_sum": 3063025,
+      "level_true": 2092.2,
+      "level_pred": 550.1,
+      "wape_score": 0.2834,
+      "level_bias": -0.7166,
+      "shape_wape_score": 0.8906
+    },
+    {
+      "setup": "B",
+      "config": "geo_level",
+      "route": 25,
+      "y_sum": 464537,
+      "level_true": 317.3,
+      "level_pred": 726.0,
+      "wape_score": 0.0,
+      "level_bias": 1.4576,
+      "shape_wape_score": 0.7881
+    },
+    {
+      "setup": "B",
+      "config": "geo_level",
+      "route": 26,
+      "y_sum": 1089964,
+      "level_true": 744.5,
+      "level_pred": 766.2,
+      "wape_score": 0.8658,
+      "level_bias": 0.0971,
+      "shape_wape_score": 0.8923
+    },
+    {
+      "setup": "B",
+      "config": "geo_level",
+      "route": 28,
+      "y_sum": 602164,
+      "level_true": 411.3,
+      "level_pred": 570.0,
+      "wape_score": 0.5191,
+      "level_bias": 0.4798,
+      "shape_wape_score": 0.8407
+    },
+    {
+      "setup": "B",
+      "config": "geo_level",
+      "route": 50,
+      "y_sum": 1157460,
+      "level_true": 790.6,
+      "level_pred": 557.7,
+      "wape_score": 0.51,
+      "level_bias": -0.2459,
+      "shape_wape_score": 0.6417
+    },
+    {
+      "setup": "B",
+      "config": "oracle_level",
+      "route": 1,
+      "y_sum": 1136093,
+      "level_true": 776.0,
+      "level_pred": 776.0,
+      "wape_score": 0.8648,
+      "level_bias": 0.0675,
+      "shape_wape_score": 0.8692
+    },
+    {
+      "setup": "B",
+      "config": "oracle_level",
+      "route": 7,
+      "y_sum": 1350573,
+      "level_true": 922.5,
+      "level_pred": 922.5,
+      "wape_score": 0.8419,
+      "level_bias": 0.0607,
+      "shape_wape_score": 0.8427
+    },
+    {
+      "setup": "B",
+      "config": "oracle_level",
+      "route": 11,
+      "y_sum": 1907061,
+      "level_true": 1302.6,
+      "level_pred": 1302.6,
+      "wape_score": 0.8586,
+      "level_bias": 0.0734,
+      "shape_wape_score": 0.8855
+    },
+    {
+      "setup": "B",
+      "config": "oracle_level",
+      "route": 12,
+      "y_sum": 1983604,
+      "level_true": 1354.9,
+      "level_pred": 1354.9,
+      "wape_score": 0.8651,
+      "level_bias": 0.0682,
+      "shape_wape_score": 0.8875
+    },
+    {
+      "setup": "B",
+      "config": "oracle_level",
+      "route": 17,
+      "y_sum": 3063025,
+      "level_true": 2092.2,
+      "level_pred": 2092.2,
+      "wape_score": 0.8556,
+      "level_bias": 0.0778,
+      "shape_wape_score": 0.8906
+    },
+    {
+      "setup": "B",
+      "config": "oracle_level",
+      "route": 25,
+      "y_sum": 464537,
+      "level_true": 317.3,
+      "level_pred": 317.3,
+      "wape_score": 0.772,
+      "level_bias": 0.0741,
+      "shape_wape_score": 0.7881
+    },
+    {
+      "setup": "B",
+      "config": "oracle_level",
+      "route": 26,
+      "y_sum": 1089964,
+      "level_true": 744.5,
+      "level_pred": 744.5,
+      "wape_score": 0.8795,
+      "level_bias": 0.066,
+      "shape_wape_score": 0.8923
+    },
+    {
+      "setup": "B",
+      "config": "oracle_level",
+      "route": 28,
+      "y_sum": 602164,
+      "level_true": 411.3,
+      "level_pred": 411.3,
+      "wape_score": 0.8364,
+      "level_bias": 0.0677,
+      "shape_wape_score": 0.8407
+    },
+    {
+      "setup": "B",
+      "config": "oracle_level",
+      "route": 50,
+      "y_sum": 1157460,
+      "level_true": 790.6,
+      "level_pred": 790.6,
+      "wape_score": 0.6616,
+      "level_bias": 0.069,
+      "shape_wape_score": 0.6417
+    },
+    {
+      "setup": "B",
+      "config": "geo_catboost_direct",
+      "route": 1,
+      "y_sum": 1136093,
+      "level_true": 776.0,
+      "level_pred": null,
+      "wape_score": 0.7831,
+      "level_bias": -0.1296,
+      "shape_wape_score": 0.8344
+    },
+    {
+      "setup": "B",
+      "config": "geo_catboost_direct",
+      "route": 7,
+      "y_sum": 1350573,
+      "level_true": 922.5,
+      "level_pred": null,
+      "wape_score": 0.8637,
+      "level_bias": 0.0249,
+      "shape_wape_score": 0.8642
+    },
+    {
+      "setup": "B",
+      "config": "geo_catboost_direct",
+      "route": 11,
+      "y_sum": 1907061,
+      "level_true": 1302.6,
+      "level_pred": null,
+      "wape_score": 0.8763,
+      "level_bias": 0.0641,
+      "shape_wape_score": 0.8884
+    },
+    {
+      "setup": "B",
+      "config": "geo_catboost_direct",
+      "route": 12,
+      "y_sum": 1983604,
+      "level_true": 1354.9,
+      "level_pred": null,
+      "wape_score": 0.7577,
+      "level_bias": -0.2303,
+      "shape_wape_score": 0.882
+    },
+    {
+      "setup": "B",
+      "config": "geo_catboost_direct",
+      "route": 17,
+      "y_sum": 3063025,
+      "level_true": 2092.2,
+      "level_pred": null,
+      "wape_score": 0.4111,
+      "level_bias": -0.583,
+      "shape_wape_score": 0.8754
+    },
+    {
+      "setup": "B",
+      "config": "geo_catboost_direct",
+      "route": 25,
+      "y_sum": 464537,
+      "level_true": 317.3,
+      "level_pred": null,
+      "wape_score": 0.0,
+      "level_bias": 2.5648,
+      "shape_wape_score": 0.7618
+    },
+    {
+      "setup": "B",
+      "config": "geo_catboost_direct",
+      "route": 26,
+      "y_sum": 1089964,
+      "level_true": 744.5,
+      "level_pred": null,
+      "wape_score": 0.4815,
+      "level_bias": 0.5183,
+      "shape_wape_score": 0.8787
+    },
+    {
+      "setup": "B",
+      "config": "geo_catboost_direct",
+      "route": 28,
+      "y_sum": 602164,
+      "level_true": 411.3,
+      "level_pred": null,
+      "wape_score": 0.0,
+      "level_bias": 1.537,
+      "shape_wape_score": 0.7166
+    },
+    {
+      "setup": "B",
+      "config": "geo_catboost_direct",
+      "route": 50,
+      "y_sum": 1157460,
+      "level_true": 790.6,
+      "level_pred": null,
+      "wape_score": 0.5162,
+      "level_bias": 0.4494,
+      "shape_wape_score": 0.6146
+    },
+    {
+      "setup": "B",
+      "config": "warm_reference",
+      "route": 1,
+      "y_sum": 1136093,
+      "level_true": 776.0,
+      "level_pred": null,
+      "wape_score": 0.9148,
+      "level_bias": -0.0335,
+      "shape_wape_score": 0.9202
+    },
+    {
+      "setup": "B",
+      "config": "warm_reference",
+      "route": 7,
+      "y_sum": 1350573,
+      "level_true": 922.5,
+      "level_pred": null,
+      "wape_score": 0.8494,
+      "level_bias": 0.0627,
+      "shape_wape_score": 0.8482
+    },
+    {
+      "setup": "B",
+      "config": "warm_reference",
+      "route": 11,
+      "y_sum": 1907061,
+      "level_true": 1302.6,
+      "level_pred": null,
+      "wape_score": 0.9057,
+      "level_bias": -0.0151,
+      "shape_wape_score": 0.9075
+    },
+    {
+      "setup": "B",
+      "config": "warm_reference",
+      "route": 12,
+      "y_sum": 1983604,
+      "level_true": 1354.9,
+      "level_pred": null,
+      "wape_score": 0.9134,
+      "level_bias": 0.0001,
+      "shape_wape_score": 0.9134
+    },
+    {
+      "setup": "B",
+      "config": "warm_reference",
+      "route": 17,
+      "y_sum": 3063025,
+      "level_true": 2092.2,
+      "level_pred": null,
+      "wape_score": 0.9241,
+      "level_bias": -0.0382,
+      "shape_wape_score": 0.9312
+    },
+    {
+      "setup": "B",
+      "config": "warm_reference",
+      "route": 25,
+      "y_sum": 464537,
+      "level_true": 317.3,
+      "level_pred": null,
+      "wape_score": 0.8148,
+      "level_bias": -0.1448,
+      "shape_wape_score": 0.8405
+    },
+    {
+      "setup": "B",
+      "config": "warm_reference",
+      "route": 26,
+      "y_sum": 1089964,
+      "level_true": 744.5,
+      "level_pred": null,
+      "wape_score": 0.9019,
+      "level_bias": -0.0558,
+      "shape_wape_score": 0.9107
+    },
+    {
+      "setup": "B",
+      "config": "warm_reference",
+      "route": 28,
+      "y_sum": 602164,
+      "level_true": 411.3,
+      "level_pred": null,
+      "wape_score": 0.8597,
+      "level_bias": -0.0115,
+      "shape_wape_score": 0.861
+    },
+    {
+      "setup": "B",
+      "config": "warm_reference",
+      "route": 50,
+      "y_sum": 1157460,
+      "level_true": 790.6,
+      "level_pred": null,
+      "wape_score": 0.7577,
+      "level_bias": 0.1352,
+      "shape_wape_score": 0.7384
+    }
+  ]
+}

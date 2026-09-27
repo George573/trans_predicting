@@ -33,7 +33,7 @@
 
 import json
 import sys
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -53,7 +53,7 @@ EVAL = (date(2025, 9, 1), date(2025, 10, 31))
 SETUPS = {"A": date(2025, 10, 31), "B": date(2025, 8, 31)}
 HALF_LIFE = 60.0        # как в продакшн-модели
 RIDGE_LAMBDA = 1.0      # на стандартизованных признаках; объявлено до замеров
-N_PERMUTATIONS = 200
+N_PERMUTATIONS = 2000
 N_BOOTSTRAP = 1000
 SEED = 0
 
@@ -61,7 +61,13 @@ SEED = 0
 # гео-признакам печатается тоже - чтобы подгонка, если она есть, была видна, а не спрятана.
 DECLARED = ("n_metro_transfers", "length_km", "n_residential_500m")
 
-LEVEL_CONFIGS = ("floor_mean_level", "floor_median_level", "geo_level", "oracle_level")
+# Признак, выигравший в таблице LOO ПОСЛЕ того, как она посчитана. Это подгонка отбором, и
+# он считается ровно для того, чтобы показать её цену: медианная ошибка у него лучше всех,
+# а на маршруте 17, который весит 24% объёма, он промахивается в 2.3 раза.
+POSTHOC = ("shared_track_km",)
+
+LEVEL_CONFIGS = ("floor_mean_level", "floor_median_level", "geo_level",
+                 "geo_level_posthoc", "oracle_level")
 RAW_CONFIGS = ("geo_catboost_direct", "warm_reference")
 
 SHAPE_CATS = ["weekday", "season", "is_holiday", "is_weekend", "is_short_working_day"]
@@ -189,6 +195,56 @@ def fit_raw(panel: pl.DataFrame, geo: pl.DataFrame, held: int, cut: date,
     return np.clip(model.predict(valid.to_pandas()[features]), 0, None)
 
 
+WARMUP_DAYS = (0, 7, 14, 31)
+WARMUP_TRAIN_END = date(2025, 10, 1)
+WARMUP_EVAL = (date(2025, 10, 2), date(2025, 10, 31))
+
+
+def warmup_curve(panel: pl.DataFrame, geo: pl.DataFrame) -> list[dict]:
+    """Сколько собственной истории нужно новой линии, чтобы прогноз стал рабочим.
+
+    Обучение: восемь известных маршрутов до 1 октября плюс первые N дней выкинутого
+    маршрута начиная с 1 сентября. Оценка всегда на одном и том же окне, 2-31 октября,
+    поэтому строки таблицы сравнимы между собой. N = 0 - это холодный старт: у линии нет
+    ни одного дня, и продакшн-архитектура с номером маршрута применяется к категории,
+    которой не видела.
+
+    Этой части в исходном плане эксперимента не было; она добавлена потому, что переводит
+    ответ из "нельзя" в "нельзя сразу, а с такого-то дня можно".
+    """
+    evaluation = panel.filter((pl.col("date") >= WARMUP_EVAL[0]) & (pl.col("date") <= WARMUP_EVAL[1]))
+    features = BASE_FEATURES + ["route"] + CYCLIC_INTRAWEEK + CALENDAR_BLOCK_FEATURES
+    rows = []
+    for days in WARMUP_DAYS:
+        own_end = EVAL[0] + timedelta(days=days - 1)
+        per_route = []
+        for held in ROUTES:
+            train = panel.filter(
+                ((pl.col("route") != held) & (pl.col("date") <= WARMUP_TRAIN_END))
+                | ((pl.col("route") == held) & (pl.col("date") >= EVAL[0]) & (pl.col("date") <= own_end))
+            )
+            valid = evaluation.filter(pl.col("route") == held).sort(["date", "hour"])
+            import catboost as cb
+            model = cb.CatBoostRegressor(**catboost_params(0.49), verbose=0,
+                                         allow_writing_files=False,
+                                         cat_features=SHAPE_CATS + ["route"], random_seed=SEED)
+            model.fit(train.to_pandas()[features], train["target"].to_numpy().astype(float),
+                      sample_weight=weights(train, WARMUP_TRAIN_END))
+            p = np.clip(model.predict(valid.to_pandas()[features]), 0, None)
+            per_route.append((valid["target"].to_numpy().astype(float), p))
+        y = np.concatenate([a for a, _ in per_route])
+        p = np.concatenate([b for _, b in per_route])
+        rows.append({
+            "own_history_days": days,
+            "wape_score": round(max(0.0, 1 - wape(y, p)), 4),
+            "worst_route_wape_score": round(min(
+                max(0.0, 1 - wape(a, b)) for a, b in per_route), 4),
+            "level_bias": round(float(p.sum() / y.sum() - 1), 4),
+        })
+        print(f"  своей истории {days:>2} дн: WAPE-score {rows[-1]['wape_score']}")
+    return rows
+
+
 def run_setup(panel: pl.DataFrame, geo: pl.DataFrame, setup: str, cut: date) -> dict:
     """девять фолдов одного информационного окна"""
     geo_features = tuple(c for c in geo.columns if c != "route")
@@ -217,6 +273,7 @@ def run_setup(panel: pl.DataFrame, geo: pl.DataFrame, setup: str, cut: date) -> 
             "floor_mean_level": float(np.mean(list(levels.values()))),
             "floor_median_level": float(np.median(list(levels.values()))),
             "geo_level": geo_level,
+            "geo_level_posthoc": predict_level(geo, levels, held, POSTHOC),
             "oracle_level": oracle[held],
         }
         preds = {name: level * shape[0.49] for name, level in level_values.items()}
@@ -318,6 +375,16 @@ def permutation_test(geo: pl.DataFrame, folds: list[dict], rng: np.random.Genera
     }
 
 
+def loo_errors(geo: pl.DataFrame, levels: dict[int, float], features=DECLARED) -> np.ndarray:
+    """относительная ошибка уровня каждого маршрута, предсказанного по остальным"""
+    routes = sorted(levels)
+    return np.array([
+        abs(predict_level(geo, {r: levels[r] for r in routes if r != held}, held, features)
+            / levels[held] - 1)
+        for held in routes
+    ])
+
+
 def level_loo_table(geo: pl.DataFrame, levels: dict[int, float]) -> list[dict]:
     """Насколько уровень маршрута предсказуем из географии, признак за признаком.
 
@@ -325,32 +392,72 @@ def level_loo_table(geo: pl.DataFrame, levels: dict[int, float]) -> list[dict]:
     признаки, а не только объявленные заранее - чтобы отбор по результату был виден.
     """
     routes = sorted(levels)
+    no_features = np.array([
+        abs(np.exp(np.mean(np.log([levels[r] for r in routes if r != held]))) / levels[held] - 1)
+        for held in routes
+    ])
     candidates = {feature: (feature,) for feature in geo.columns if feature != "route"}
     candidates["ЗАЯВЛЕНО: " + " + ".join(DECLARED)] = DECLARED
 
-    rows = [{
-        "features": "без признаков (среднее по остальным)",
-        "median_abs_error_pct": round(float(np.median([
-            abs(np.exp(np.mean(np.log([levels[r] for r in routes if r != held]))) / levels[held] - 1)
-            for held in routes
-        ])) * 100, 1),
-        "max_abs_error_pct": round(float(np.max([
-            abs(np.exp(np.mean(np.log([levels[r] for r in routes if r != held]))) / levels[held] - 1)
-            for held in routes
-        ])) * 100, 1),
-    }]
+    rows = [{"features": "без признаков (среднее по остальным)",
+             "median_abs_error_pct": round(float(np.median(no_features)) * 100, 1),
+             "max_abs_error_pct": round(float(np.max(no_features)) * 100, 1)}]
     for name, features in candidates.items():
-        errors = [
-            abs(predict_level(geo, {r: levels[r] for r in routes if r != held}, held, features)
-                / levels[held] - 1)
-            for held in routes
-        ]
-        rows.append({
-            "features": name,
-            "median_abs_error_pct": round(float(np.median(errors)) * 100, 1),
-            "max_abs_error_pct": round(float(np.max(errors)) * 100, 1),
-        })
+        errors = loo_errors(geo, levels, features)
+        rows.append({"features": name,
+                     "median_abs_error_pct": round(float(np.median(errors)) * 100, 1),
+                     "max_abs_error_pct": round(float(np.max(errors)) * 100, 1)})
     return sorted(rows, key=lambda r: r["median_abs_error_pct"])
+
+
+def permutation_best_feature(geo: pl.DataFrame, levels: dict[int, float],
+                             rng: np.random.Generator) -> dict:
+    """Контроль на подгонку отбором: сравниваем ЛУЧШИЙ из 18 признаков с лучшим из 18 на
+    перемешанной географии.
+
+    Смотреть на таблицу и брать оттуда победителя - это восемнадцать попыток, а не одна.
+    Корректное сравнение требует, чтобы и нулевое распределение строилось так же: внутри
+    каждой перестановки тоже берётся минимум по всем признакам.
+    """
+    features = [c for c in geo.columns if c != "route"]
+    routes = np.array(sorted(geo["route"].to_list()))
+
+    def best(table: pl.DataFrame) -> tuple[str, float]:
+        scores = {f: float(np.median(loo_errors(table, levels, (f,)))) for f in features}
+        winner = min(scores, key=scores.get)
+        return winner, scores[winner]
+
+    winner, real = best(geo)
+    null = np.array([
+        best(geo.with_columns(pl.Series("route", routes[rng.permutation(len(routes))])).sort("route"))[1]
+        for _ in range(N_PERMUTATIONS)
+    ])
+    errors = loo_errors(geo, levels, (winner,))
+    return {
+        "winner": winner,
+        "real_median_error_pct": round(real * 100, 1),
+        "real_mean_error_pct": round(float(np.mean(errors)) * 100, 1),
+        "real_max_error_pct": round(float(np.max(errors)) * 100, 1),
+        "null_median_pct": round(float(np.median(null)) * 100, 1),
+        "null_p05_pct": round(float(np.percentile(null, 5)) * 100, 1),
+        "beaten_share": round(float((null > real).mean()), 3),
+        "monte_carlo_se": round(float(np.sqrt(0.25 / N_PERMUTATIONS)), 3),
+    }
+
+
+def level_sensitivity(folds: list[dict]) -> list[dict]:
+    """Сколько стоит ошибка в объёме новой линии: настоящий уровень умножается на k.
+
+    Отвечает на прикладной вопрос - насколько точной должна быть внешняя оценка объёма
+    (обследование, аналогия, экспертная прикидка), чтобы прогноз имел смысл.
+    """
+    y = np.concatenate([f["y"] for f in folds])
+    rows = []
+    for k in (0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 2.0):
+        p = np.concatenate([f["level_values"]["oracle_level"] * k * f["shape"][0.49] for f in folds])
+        rows.append({"level_error": f"{k:+.0%}".replace("+", "x").replace("%", ""),
+                     "k": k, "wape_score": round(max(0.0, 1 - wape(y, p)), 4)})
+    return rows
 
 
 def intervals_table(folds: list[dict]) -> list[dict]:
@@ -396,6 +503,8 @@ def main() -> None:
     loo = level_loo_table(geo, levels_full)
     results["level_loo"] = loo
     print(table(loo, "Предсказуемость уровня маршрута из географии, LOO по девяти маршрутам"))
+    results["permutation_best_feature"] = permutation_best_feature(geo, levels_full, rng)
+    print(f"\nЛучший признак против перемешивания: {results['permutation_best_feature']}")
 
     per_route_rows, summary_rows = [], []
     for setup, cut in SETUPS.items():
@@ -419,6 +528,12 @@ def main() -> None:
 
         results.setdefault("permutation", {})[setup] = permutation_test(geo, folds, rng)
         results.setdefault("intervals", {})[setup] = intervals_table(folds)
+        results.setdefault("sensitivity", {})[setup] = level_sensitivity(folds)
+
+    print("\n=== разогрев: сколько своей истории нужно новой линии ===")
+    results["warmup"] = warmup_curve(panel, geo)
+    print(table(results["warmup"], "Оценка на 2-31 октября, обучение на восьми маршрутах "
+                                   "плюс первые N дней выкинутого"))
 
     results["summary"] = summary_rows
     results["per_route"] = per_route_rows
@@ -427,6 +542,8 @@ def main() -> None:
     for setup in SETUPS:
         print(table(results["intervals"][setup],
                     f"Интервалы 80% на гео-модели, вариант {setup}"))
+        print(table(results["sensitivity"][setup],
+                    f"Чувствительность к ошибке в объёме линии, вариант {setup}"))
         print(f"\nПерестановочный контроль, вариант {setup}: {results['permutation'][setup]}")
     print(table([r for r in per_route_rows if r["config"] in ("geo_level", "warm_reference")],
                 "По маршрутам: гео-модель против модели с историей"))

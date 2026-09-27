@@ -1,0 +1,21 @@
+features;median_abs_error_pct;max_abs_error_pct
+shared_track_km;10.5;230.6
+n_residential_500m;20.9;142.7
+n_routes_sharing;21.5;264.2
+n_bus_stops_300m;22.5;159.1
+n_education_500m;25.4;126.0
+n_stops;26.7;161.3
+length_km;28.6;150.2
+n_platforms_tagged;30.0;133.2
+ЗАЯВЛЕНО: n_metro_transfers + length_km + n_residential_500m;30.6;170.8
+n_shop_500m;31.5;165.0
+n_metro_transfers;36.8;212.9
+без признаков (среднее по остальным);39.7;227.1
+dist_center_km;39.8;229.7
+share_within_10km;39.8;266.9
+n_rail_transfers;40.0;227.1
+stop_spacing_m;40.1;227.2
+shared_share;41.6;313.5
+min_dist_center_km;41.8;226.8
+share_within_5km;41.8;232.3
+n_metro_transfers_500m;42.1;210.2

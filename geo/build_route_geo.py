@@ -24,11 +24,8 @@ from pathlib import Path
 DATA = Path(__file__).parent / "data"
 ROUTES = (1, 7, 11, 12, 17, 25, 26, 28, 50)
 BBOX = "55.49,37.3,55.95,37.95"
-MIRRORS = (
-    "https://overpass-api.de/api/interpreter",
-    "https://overpass.private.coffee/api/interpreter",
-    "https://overpass.kumi.systems/api/interpreter",
-)
+OVERPASS = "https://overpass-api.de/api/interpreter"
+ATTEMPTS = 12
 
 # Кремль, нулевая точка Москвы для радиальных признаков
 CENTER_LON, CENTER_LAT = 37.6175, 55.7520
@@ -42,9 +39,11 @@ PLATFORM_ROLES = ("platform", "platform_entry_only", "platform_exit_only")
 STOP_ROLES = ("stop", "stop_entry_only", "stop_exit_only")
 
 TRANSFER_RADIUS_KM = 0.3      # пересадка: остановка трамвая рядом со станцией
+WALK_TO_METRO_KM = 0.8        # дальше этого до метро уже не дойти пешком, трамвай безальтернативен
 NEAR_RADIUS_M = 500           # застройка и точки притяжения вдоль линии
 BUS_RADIUS_M = 300            # подвозящая сеть
-STOP_DEDUP_KM = 0.06          # две платформы ближе 60 м - одна остановка
+STOP_DEDUP_KM = 0.15          # платформы двух направлений ближе 150 м - одна остановка
+                              # (минимальный перегон в Москве около 300 м, так что не склеим разные)
 TRACK_SNAP_M = 30             # узел остановки считается принадлежащим линии в этом радиусе
 
 ROUTE_QUERY = (
@@ -76,11 +75,20 @@ def tram_stops_query(relation_ids: list[int]) -> str:
 
 
 def counts_query(relation_ids: list[int]) -> str:
-    """Плотность окружения вокруг линии. out count не тянет объекты, только их число."""
+    """Плотность окружения вокруг линии. out count не тянет объекты, только их число.
+
+    Жилые дома считаются трижды, и это не избыточность. Число зданий - плохой прокси
+    населения: башня на 25 этажей и частный дом дают по единице. Поэтому отдельно берутся
+    многоквартирные дома (building=apartments) и дома от девяти этажей - у них на здание
+    приходится на порядок больше жителей.
+    """
     ids = ",".join(str(i) for i in relation_ids)
     return (
         f"[out:json][timeout:300];rel(id:{ids});way(r)->.w;"
         f'nwr(around.w:{NEAR_RADIUS_M})["building"~"^(apartments|residential|house|dormitory)$"];out count;'
+        f'nwr(around.w:{NEAR_RADIUS_M})["building"="apartments"];out count;'
+        f'nwr(around.w:{NEAR_RADIUS_M})["building"~"^(apartments|residential)$"]'
+        f'["building:levels"~"^([9]|[1-9][0-9])$"];out count;'
         f'nwr(around.w:{NEAR_RADIUS_M})["shop"];out count;'
         f'nwr(around.w:{NEAR_RADIUS_M})["amenity"~"^(school|university|college|kindergarten)$"];out count;'
         f'node(around.w:{BUS_RADIUS_M})["highway"="bus_stop"];out count;'
@@ -91,21 +99,21 @@ def overpass(query: str) -> list[dict]:
     """Запрос через curl: он ходит через системное хранилище сертификатов, в отличие от
     urllib, который в части окружений падает на проверке цепочки.
 
-    Зеркала перебираются по кругу с нарастающей паузой: публичные инстансы Overpass
-    регулярно отвечают "server is probably too busy" вместо JSON.
+Запрос повторяется с паузой: публичный инстанс Overpass регулярно отвечает
+    "server is probably too busy" вместо JSON, со второй-третьей попытки проходит.
     """
-    for attempt, server in enumerate(MIRRORS * 3):
+    for attempt in range(ATTEMPTS):
         result = subprocess.run(
             ["curl", "-s", "-m", "300", "-A", "tram-geo/1.0",
-             "--data-urlencode", f"data={query}", server],
+             "--data-urlencode", f"data={query}", OVERPASS],
             capture_output=True, text=True,
         )
         try:
             return json.loads(result.stdout)["elements"]
         except (json.JSONDecodeError, KeyError):
             reason = re.sub(r"<[^>]+>", " ", result.stdout).split("Error:")[-1].strip()
-            print(f"  {server}: {reason[:120] or 'нет ответа'}")
-            time.sleep(10 * (attempt + 1))
+            print(f"  попытка {attempt + 1}: {reason[:90] or 'нет ответа'}")
+            time.sleep(5)
     raise RuntimeError("Overpass недоступен")
 
 
@@ -137,6 +145,26 @@ def dedup_points(points: list[tuple[float, float]], radius_km: float) -> list[tu
         if not any(km(lon, lat, klon, klat) < radius_km for klon, klat in kept):
             kept.append((lon, lat))
     return kept
+
+
+def unique_stops(nodes: list[dict]) -> list[tuple[float, float]]:
+    """Физические остановки: узлы railway=tram_stop, склеенные по названию.
+
+    У остановки по узлу на каждый путь каждого направления, но в OSM все они подписаны
+    одним названием, поэтому склейка по имени точна. Безымянные узлы (в наших данных таких
+    нет, страховка на будущее) склеиваются по расстоянию.
+    """
+    by_name: dict[str, tuple[float, float]] = {}
+    unnamed: list[tuple[float, float]] = []
+    for node in nodes:
+        if "lon" not in node:
+            continue
+        name = node.get("tags", {}).get("name")
+        if name:
+            by_name.setdefault(name, (node["lon"], node["lat"]))
+        else:
+            unnamed.append((node["lon"], node["lat"]))
+    return list(by_name.values()) + dedup_points(unnamed, STOP_DEDUP_KM)
 
 
 def parse_routes(elements: list[dict]) -> dict[int, list[dict]]:
@@ -202,9 +230,7 @@ def build() -> None:
 
         relation_ids = [d["relation"] for d in dirs]
         tram_stops = cached(f"osm_tramstops_{route}.json", tram_stops_query(relation_ids))
-        all_stops = dedup_points(
-            [(n["lon"], n["lat"]) for n in tram_stops if "lon" in n], STOP_DEDUP_KM
-        )
+        all_stops = unique_stops(tram_stops)
         n_stops = len(all_stops)
         n_platforms = len(dedup_points([p for d in dirs for p in d["platforms"]], STOP_DEDUP_KM))
 
@@ -216,6 +242,9 @@ def build() -> None:
 
         n_metro = near(subway, TRANSFER_RADIUS_KM)
         n_rail = near(railway, TRANSFER_RADIUS_KM)
+        # остановки, от которых до метро не дойти пешком: там трамвай безальтернативен, и
+        # это единственное в наборе, что описывает не саму линию, а отсутствие конкурента
+        n_far_from_metro = n_stops - near(subway, WALK_TO_METRO_KM)
 
         track = [(p["lon"], p["lat"]) for d in dirs for g in d["ways"].values() for p in g]
         dists = [km(lon, lat, CENTER_LON, CENTER_LAT) for lon, lat in track]
@@ -231,7 +260,8 @@ def build() -> None:
         neighbours = {r for w in shared_ways for r in way_owners[w]} - {route}
 
         counts = cached(f"osm_counts_{route}.json", counts_query(relation_ids))
-        residential, shops, education, bus_stops = (int(c["tags"]["total"]) for c in counts)
+        residential, apartments, tall, shops, education, bus_stops = (
+            int(c["tags"]["total"]) for c in counts)
 
         rows.append({
             "route": route,
@@ -241,6 +271,8 @@ def build() -> None:
             "n_metro_transfers": n_metro,
             "n_rail_transfers": n_rail,
             "n_metro_transfers_500m": near(subway, 0.5),
+            "n_stops_far_from_metro": n_far_from_metro,
+            "share_stops_far_from_metro": round(n_far_from_metro / n_stops, 3) if n_stops else 0.0,
             "dist_center_km": round(km(centroid_lon, centroid_lat, CENTER_LON, CENTER_LAT), 2),
             "min_dist_center_km": round(min(dists), 2),
             "share_within_5km": round(sum(d <= 5 for d in dists) / len(dists), 3),
@@ -249,6 +281,8 @@ def build() -> None:
             "shared_share": round(shared_km / length_km, 3) if length_km else 0.0,
             "n_routes_sharing": len(neighbours),
             "n_residential_500m": residential,
+            "n_apartments_500m": apartments,
+            "n_tall_residential_500m": tall,
             "n_shop_500m": shops,
             "n_education_500m": education,
             "n_bus_stops_300m": bus_stops,

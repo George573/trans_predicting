@@ -79,19 +79,22 @@ def fig_aggregation(m: pl.DataFrame) -> None:
 
 
 def fig_intervals(q: pl.DataFrame) -> None:
+    """квантильный интервал CatBoost: ширина не реагирует на горизонт, покрытие падает"""
     d = q.group_by("lead").agg(pl.col("width_rel").mean(), pl.col("coverage_hour").mean(),
                                pl.col("coverage_day").mean()).sort("lead")
-    fig, ax = plt.subplots(figsize=(7, 4), constrained_layout=True)
-    ax.plot(d["lead"], d["width_rel"], "o-", color="#2b6cb0", lw=1.8, ms=4, label="ширина интервала 10-90")
-    style(ax, "лаг, месяцев", "ширина, доля фактического объёма", "квантильный интервал: ширина против покрытия")
-    ax2 = ax.twinx()
-    ax2.plot(d["lead"], d["coverage_hour"], "s--", color="#9b2c2c", lw=1.5, ms=4, label="покрытие, часы")
-    ax2.plot(d["lead"], d["coverage_day"], "^--", color="#b7791f", lw=1.5, ms=4, label="покрытие, сутки")
-    ax2.axhline(0.8, color="#444", lw=0.8, ls=":")
-    ax2.set_ylabel("доля фактов внутри интервала"); ax2.set_ylim(0, 1.05)
-    ax2.spines["top"].set_visible(False)
-    lines = ax.get_lines() + ax2.get_lines()[:2]
-    ax.legend(lines, [l.get_label() for l in lines], frameon=False, fontsize=9, loc="center right")
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4), constrained_layout=True)
+    axes[0].plot(d["lead"], d["width_rel"], "o-", color="#2b6cb0", lw=1.8, ms=5)
+    axes[0].set_ylim(0, 0.45)
+    style(axes[0], "лаг, месяцев", "ширина, доля фактического объёма",
+          "ширина интервала 10-90: на горизонт не реагирует")
+    axes[1].plot(d["lead"], d["coverage_hour"], "s-", color="#9b2c2c", lw=1.8, ms=5, label="часы")
+    axes[1].plot(d["lead"], d["coverage_day"], "^-", color="#b7791f", lw=1.8, ms=5, label="сутки x маршрут")
+    axes[1].axhline(0.8, color="#444", lw=1.0, ls="--")
+    axes[1].text(5, 0.815, "заявленные 80%", fontsize=8.5, color="#4a5568")
+    axes[1].set_ylim(0, 1.0)
+    style(axes[1], "лаг, месяцев", "доля фактов внутри интервала",
+          "покрытие: ниже заявленного и падает с горизонтом")
+    axes[1].legend(frameon=False, fontsize=9, loc="lower left")
     fig.savefig(IMG / "horizon_intervals.svg")
     plt.close(fig)
 
@@ -167,7 +170,7 @@ def fig_2026(m: pl.DataFrame) -> None:
     f = m.filter(pl.col("scheme") == "lomo_flat", pl.col("model") == "mix_cb70_mlp30")
     floor = dict(zip(f["target_month"].to_list(), f["wape_hour"].to_list()))
     PEN = 0.0255
-    NOV_DEC = 0.109
+    NOV_DEC = 0.111
     months = list(range(1, 13))
     base = [floor.get(mo, NOV_DEC) for mo in months]
     proj = [b + PEN for b in base]
@@ -180,20 +183,20 @@ def fig_2026(m: pl.DataFrame) -> None:
     for mo in (11, 12):
         ax.patches[mo - 1].set_hatch("//")
     ax.set_xticks(months)
-    ax.set_xticklabels(["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"], fontsize=8)
+    ax.set_xticklabels(["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя *", "дек *"], fontsize=8)
     style(ax, "", "WAPE по часам", "ожидаемая точность по месяцам 2026 года")
     ax.legend(frameon=False, fontsize=8.5, loc="upper left")
-    ax.text(11.5, 0.02, "штриховка -\nноя-дек взяты\nпо факту 2025", fontsize=7.5, color="#4a5568", ha="center")
+    ax.set_xlabel("* ноя и дек: замера нет, взят фактический результат ноя-дек 2025", fontsize=8)
 
     ax = axes[1]
-    weighted = 0.145
+    weighted = 0.146
     trends = np.arange(0, 0.11, 0.005)
     ax.plot(trends * 100, [1 - (weighted + g) for g in trends], color="#9b2c2c", lw=2)
     for thr, lbl in ((0.88, "порог 5 баллов"), (0.80, "порог 4 балла"), (0.70, "порог 3 балла")):
         ax.axhline(thr, color="#718096", lw=0.8, ls=":")
         ax.text(10.2, thr + 0.004, lbl, fontsize=8, color="#4a5568", ha="right")
     style(ax, "неизвестный годовой тренд спроса, %", "WAPE-score за год",
-          "чем стоит незнание тренда: сдвиг уровня входит в метрику целиком")
+          "цена незнания тренда: сдвиг входит в метрику целиком")
     fig.savefig(IMG / "horizon_2026.svg")
     plt.close(fig)
 
