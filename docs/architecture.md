@@ -6,26 +6,33 @@ adaptive-pooling options.
 
 | Layer | Output per context |
 |---|---|
-| Boarding counts / scale + seven calendar channels | 8 × 336 |
-| Conv1d(8, 40, kernel=50), GELU, MaxPool1d(2), dropout(0.2) | 40 × 168 |
+| Boarding counts / scale + nine calendar channels | 10 × 336 |
+| Conv1d(10, 40, kernel=50), GELU, MaxPool1d(2), dropout(0.2) | 40 × 168 |
 | Conv1d(40, 40, kernel=50), GELU, MaxPool1d(2), dropout(0.2) | 40 × 84 |
 | Conv1d(40, 20, kernel=50), GELU, MaxPool1d(2), dropout(0.2) | 20 × 42 |
 | Flatten | 840 |
-| Append route embedding (8), target calendar (5), lead (1) | 854 |
-| Linear(854, 320), GELU, dropout(0.1), Linear(320, 320), GELU, dropout(0.1), Linear(320, 24) | 24 |
+| Append route embedding (8), target calendar (7), lead (1) | 856 |
+| Linear(856, 320), GELU, dropout(0.1), Linear(320, 320), GELU, dropout(0.1), Linear(320, 24) | 24 |
 | Softplus × count scale | 24 nonnegative boarding predictions |
 
 Convolutions use padding to preserve length before pooling. History is always
 14 days. Its calendar channels encode sine/cosine of hour, weekday and day of month,
-followed by binary `is_holiday`. Target calendar omits the two hour channels and
-retains the holiday flag. Russian federal public holidays and transferred days off
-are marked 1; ordinary weekends are not. The calendar covers 2025, including
-transfers under Resolution No. 1335 of 4 October 2024
-(https://government.ru/docs/52895/). Unsupported years raise an error; regional
-holidays are excluded. Lead is `(lead−1)/60`, with integer leads 1–61.
+followed by binary `is_holiday`, `is_day_off`, and `is_short_working_day`.
+Target calendar omits the two hour channels and retains all three flags, giving
+seven features per requested day. Public holidays and transferred days off are
+holidays; ordinary weekends are day-off dates only. Explicit XML overrides handle
+working Saturdays and shortened working days before the usual weekend rule.
+
+Calendar overrides come from bundled `calendars/<year>.xml` files, cached by year.
+The supplied 2025 XML follows Resolution No. 1335 of 4 October 2024
+(https://government.ru/docs/52895/). Additional years require their XML files;
+missing calendars, malformed overrides, duplicate dates, or mismatched years
+raise errors. Regional holidays are excluded. Calendar feature names are defined
+in `data.py`; the model derives its calendar input sizes from those names.
+Lead is `(lead−1)/60`, with integer leads 1–61.
 Count scale is `max(1, mean fitting-period counts)`.
 
-`ForecastNetwork(scale)` accepts `counts [B,1,336]` and `calendar [B,7,336]`.
+`ForecastNetwork(scale)` accepts `counts [B,1,336]` and `calendar [B,9,336]`.
 A batch contains B route/cutoff contexts and R requested days. Request
 `context_indices [R]` select their shared encoded histories; route indices, target
 calendar and leads condition the head. Output and targets are `[R,24]`.

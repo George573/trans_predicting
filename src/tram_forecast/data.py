@@ -9,7 +9,13 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from .russian_calendar import is_holiday
+from .russian_calendar import day_flags
+
+HISTORY_CALENDAR_FEATURES = (
+    "hour_sin", "hour_cos", "weekday_sin", "weekday_cos", "month_day_sin",
+    "month_day_cos", "is_holiday", "is_day_off", "is_short_working_day",
+)
+REQUEST_CALENDAR_FEATURES = HISTORY_CALENDAR_FEATURES[2:]
 
 HISTORY_DAYS = 21
 ROUTES = (1, 7, 11, 12, 17, 25, 26, 28, 50)
@@ -20,14 +26,17 @@ def parse_route(value):
 
 
 def calendar(timestamps):
-    """Hour, weekday, month-day sine/cosine pairs, then binary is_holiday."""
+    """Cyclic date features followed by holiday, day-off and short-day flags."""
     t = list(timestamps)
     phases = np.array(
         [[x.hour / 24, x.weekday() / 7, (x.day - 1) / 31] for x in t], dtype=np.float64
     ) * 2 * np.pi
     cyclic = np.stack([f(phases[:, i]) for i in range(3) for f in (np.sin, np.cos)])
-    holiday = np.array([is_holiday(x.date()) for x in t], dtype=np.float32)[None, :]
-    return np.concatenate((cyclic, holiday), axis=0).astype(np.float32)
+    flags = [day_flags(x.date()) for x in t]
+    binary = np.array([
+        [f.is_holiday, f.is_day_off, f.is_short_working_day] for f in flags
+    ], dtype=np.float32).T
+    return np.concatenate((cyclic, binary), axis=0).astype(np.float32)
 
 
 def request_calendar(days):

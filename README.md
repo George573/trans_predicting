@@ -5,12 +5,15 @@ A boarding-only PyTorch CNN that encodes a route's hourly history once and predi
 and forecast lead condition the predictions. The model uses 14 days of history and the
 forecast horizon is seven days, configurable up to 61.
 
-Calendar inputs include binary `is_holiday`: 1 for Russian federal public holidays
-and transferred days off, 0 otherwise. Ordinary weekends use the weekday features.
-The checked-in calendar covers 2025; other years need their official transfers added
-in `src/tram_forecast/russian_calendar.py`. The flag is included in both hourly
-history and requested forecast days. Models trained before this feature was added
-must be retrained because the input dimensions changed.
+Calendar inputs include three binary Russian production-calendar flags:
+`is_holiday` (public holidays and transferred days off), `is_day_off` (including
+ordinary weekends, with working-Saturday overrides), and `is_short_working_day`.
+The XML source is bundled in `src/tram_forecast/calendars/2025.xml`, based on the
+example calendar. Additional years can be supported by adding a validated
+`calendars/<year>.xml` file. Missing years raise an error; regional holidays are
+excluded. XML files are cached per year and included in installed packages.
+All three flags apply to hourly history and every requested forecast day.
+Models trained with the previous calendar inputs must be retrained.
 
 ## Project layout
 
