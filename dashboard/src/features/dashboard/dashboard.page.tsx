@@ -9,6 +9,7 @@ import { ModelPanel } from "./ui/model-panel";
 import { Workspace } from "./ui/workspace";
 import { modelTitles, recursiveFrom, type ModelInfo, type ModelName } from "./domain/model";
 import { momentLabel } from "./lib/moment";
+import { routeColor } from "./lib/level";
 
 function useServiceModels() {
   const [models, setModels] = useState<ModelInfo[]>([]);
@@ -49,7 +50,7 @@ function DashboardSidebar({ routes, selected, onSelect, data, stale }: { routes:
         const worst = ratios?.reduce((best, item) => item.percent > best.percent ? item : best, ratios[0]);
         const moment = worst && data ? momentLabel(data, worst.index) : "";
         return <Box key={route.route}>
-          <Checkbox label={`Маршрут ${route.route}`} checked={selected.includes(route.route)} onChange={() => onSelect(selected.includes(route.route) ? selected.filter((item) => item !== route.route) : [...selected, route.route])} />
+          <Checkbox label={<Group gap={6} wrap="nowrap"><Box w={14} h={4} style={{ borderRadius: 2, background: routeColor(routes, route.route) }} />Маршрут {route.route}</Group>} checked={selected.includes(route.route)} onChange={() => onSelect(selected.includes(route.route) ? selected.filter((item) => item !== route.route) : [...selected, route.route])} />
           <Text size="xs" c="dimmed">{route.name}{!route.has_history && " · оценка"}{!route.has_geometry ? " · нет линии на карте" : route.geometry_source === "spravochnik" ? " · линия из справочника" : route.geometry_source === "osm" ? " · линия из OSM" : ""}</Text>
           {series && <Text size="xs" c={stale ? "dimmed" : undefined}>{!worst ? "Нет сравнения" : `Максимум ${Math.round(worst.percent)}% от обычного уровня · ${moment}${stale ? " · данные обновляются" : ""}`}</Text>}
         </Box>;

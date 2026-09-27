@@ -3,7 +3,7 @@ import L from "leaflet";
 import { Alert, Group, Paper, Text, Title } from "@mantine/core";
 import type { ForecastResponse, Route } from "../model/forecast-state";
 import { apiBaseUrl, authorizedFetch } from "@/shared/api/instance";
-import { routeLevel } from "../lib/level";
+import { routeColor, routeLevel } from "../lib/level";
 import { momentLabel, quantityLabel } from "../lib/moment";
 import "leaflet/dist/leaflet.css";
 
@@ -58,9 +58,7 @@ export function RouteMap({ routes, selected, onSelect, data, selectedIndex }: Pr
     const layer = L.geoJSON(filtered as unknown as Parameters<typeof L.geoJSON>[0], {
       style: (feature) => {
         const route = Number(feature?.properties?.route);
-        const series = data.series.find((item) => item.route === route);
-        const level = routeLevel(series?.value[selectedIndex], series?.usual[selectedIndex]);
-        return { color: level.color, weight: weight(route), opacity: opacity(route), lineCap: "round", lineJoin: "round" };
+        return { color: routeColor(routes, route), weight: weight(route), opacity: opacity(route), lineCap: "round", lineJoin: "round" };
       },
       onEachFeature: (feature, item) => {
         const route = Number(feature.properties?.route);
@@ -110,8 +108,8 @@ export function RouteMap({ routes, selected, onSelect, data, selectedIndex }: Pr
     {geometry && selected.length > 0 && !geometry.features.some((feature) => feature.properties.kind === "stop" && selected.includes(feature.properties.route)) && <Text size="xs" c="dimmed">Для выбранных маршрутов нет остановок в геометрии.</Text>}
     {missing.length > 0 && <Text size="xs" c="dimmed" mb="xs">Нет линии для маршрутов: {missing.map((route) => route.route).join(", ")}</Text>}
     <div ref={element} style={{ height: "clamp(420px, 62vh, 760px)", background: "#10151b", borderRadius: 8 }} aria-label="Карта трамвайных маршрутов" />
-    <Text size="xs" mt="xs">% от обычного уровня</Text>
-    <Group gap="md"><Text size="xs" c="#3bb8a3">До 80%</Text><Text size="xs" c="#e3b350">80-120%</Text><Text size="xs" c="#ef6b73">Выше 120%</Text><Text size="xs" c="dimmed">Серый: нет сравнения</Text></Group>
+    <Group gap="md" mt="xs">{routes.filter((route) => route.has_geometry).map((route) => <Group key={route.route} gap={6} wrap="nowrap"><div style={{ width: 16, height: 4, borderRadius: 2, background: routeColor(routes, route.route) }} /><Text size="xs">{route.route}</Text></Group>)}</Group>
+    <Text size="xs" c="dimmed">Процент от обычного уровня - в подсказке при наведении на линию.</Text>
     <Text size="xs" c="dimmed">Кольцо - превышение верхней границы коридора по маршруту в целом.</Text>
     <Text size="xs" c="dimmed">Остановки показываются у выбранных маршрутов, только как геометрия, без данных о посадках.</Text>
     <Text size="xs" c="dimmed">Геометрия маршрутов и остановок: справочник и © OpenStreetMap, локальная копия из сервиса.</Text>

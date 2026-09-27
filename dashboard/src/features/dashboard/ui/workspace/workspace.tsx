@@ -60,7 +60,7 @@ export function Workspace({ data, comparison, recursive, loading, updatedAt, set
       <ConditionAudit data={data} />
       <Paper p="md" withBorder><Title order={6}>Сведения о запросе</Title><Text size="sm">Модель: {data.meta.model}</Text><Text size="sm">Версия бандла: {data.bundle}</Text><Text size="sm">Строк модели: {data.meta.rows}</Text></Paper>
     </SimpleGrid>)}
-    {data && !empty && <RouteCharts data={data} comparison={comparison} onRouteSelect={onRouteSelect} />}
+    {data && !empty && <RouteCharts data={data} comparison={comparison} routes={routes} onRouteSelect={onRouteSelect} />}
     {!loading && !failure && !data && <Text c="dimmed">Нет данных прогноза</Text>}
     <ExportControls request={request} acceptedRequest={acceptedRequest} ready={!!data && !empty && !loading && !failure && matched} />
   </Stack>;

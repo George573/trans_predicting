@@ -1,14 +1,13 @@
 import { Paper, SimpleGrid, Stack, Text, Title } from "@mantine/core";
 import { BarChart, DonutChart } from "@mantine/charts";
 import type { ForecastResponse } from "../model/forecast-state";
-import { routeLevel } from "../lib/level";
+import { routeColor, routeLevel } from "../lib/level";
 
-type Props = { data: ForecastResponse; comparison: { title: string; data: ForecastResponse } | null; onRouteSelect: (route: number) => void };
+type Props = { data: ForecastResponse; comparison: { title: string; data: ForecastResponse } | null; routes: { route: number }[]; onRouteSelect: (route: number) => void };
 
-const palette = ["indigo.5", "teal.5", "orange.5", "grape.5", "cyan.5", "lime.5", "pink.5", "yellow.5", "blue.5", "red.5"];
 const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
 
-export function RouteCharts({ data, comparison, onRouteSelect }: Props) {
+export function RouteCharts({ data, comparison, routes, onRouteSelect }: Props) {
   const rows = data.series.map((series) => {
     const usual = sum(series.usual);
     const other = comparison?.data.series.find((item) => item.route === series.route);
@@ -64,7 +63,7 @@ export function RouteCharts({ data, comparison, onRouteSelect }: Props) {
           labelsType="percent"
           chartLabel={total.toLocaleString("ru-RU")}
           valueFormatter={(value) => value.toLocaleString("ru-RU")}
-          data={rows.map((row, index) => ({ name: `Маршрут ${row.number}`, value: row.value, color: palette[index % palette.length] }))}
+          data={rows.map((row) => ({ name: `Маршрут ${row.number}`, value: row.value, color: routeColor(routes, row.number) }))}
         />
       </Stack>
     </Paper>}
