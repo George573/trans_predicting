@@ -99,7 +99,7 @@ func (n *Net) Explain(c features.Cell, hour int) ([]features.Feature, float64, e
 }
 
 func (n *Net) Describe() string {
-	return fmt.Sprintf("CNN, история %d суток до %s, %d параметров", n.HistoryDays, n.Cutoff, n.Parameters)
+	return fmt.Sprintf("CNN, история %d суток до %s, %d параметров", n.HistoryDays, n.cutoff.Format("02.01.2006"), n.Parameters)
 }
 
 func (n *Net) index(c features.Cell) (int, int, error) {
@@ -109,7 +109,7 @@ func (n *Net) index(c features.Cell) (int, int, error) {
 	}
 	d := int(c.Date.Sub(n.cutoff).Hours() / 24)
 	if d < 0 || d >= n.Days+n.Recursive.Days {
-		return 0, 0, fmt.Errorf("CNN прогнозирует %d суток от %s, запрошено %s", n.Days+n.Recursive.Days, n.Cutoff, c.Date.Format(time.DateOnly))
+		return 0, 0, fmt.Errorf("CNN прогнозирует %d суток от %s, запрошено %s", n.Days+n.Recursive.Days, n.cutoff.Format("02.01.2006"), c.Date.Format("02.01.2006"))
 	}
 	return r, d, nil
 }

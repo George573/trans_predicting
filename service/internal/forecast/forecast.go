@@ -65,7 +65,7 @@ func (e *Engine) Grid(routes []int, from time.Time, days int) (*Grid, error) {
 	for d := range days {
 		day, ok := e.Cal.Day(from.AddDate(0, 0, d))
 		if !ok {
-			return nil, fmt.Errorf("нет производственного календаря на %s", from.AddDate(0, 0, d).Format(time.DateOnly))
+			return nil, fmt.Errorf("нет производственного календаря на %s", from.AddDate(0, 0, d).Format("02.01.2006"))
 		}
 		info[d] = day
 	}

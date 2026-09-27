@@ -123,14 +123,14 @@ func inDomain(e *forecast.Engine, field string, t time.Time) error {
 	msg := ""
 	switch {
 	case t.Before(b.From):
-		msg = "доступно с " + b.From.Format(time.DateOnly)
+		msg = "доступно с " + b.From.Format("02.01.2006")
 	case t.After(b.To):
-		msg = "доступно до " + b.To.Format(time.DateOnly)
+		msg = "доступно до " + b.To.Format("02.01.2006")
 	default:
 		return nil
 	}
 	return &apiError{status: http.StatusBadRequest, Code: "out_of_domain", Field: field,
-		Message: fmt.Sprintf("Дата %s вне области определения модели %s, %s", t.Format(time.DateOnly), e.Name, msg)}
+		Message: fmt.Sprintf("Дата %s вне области определения модели %s, %s", t.Format("02.01.2006"), e.Name, msg)}
 }
 
 func checkHorizon(h string) error {

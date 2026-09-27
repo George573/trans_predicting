@@ -620,7 +620,7 @@ export interface components {
                  * @example {
                  *       "error": {
                  *         "code": "out_of_domain",
-                 *         "message": "Дата 2026-07-01 вне области определения модели catboost, доступно до 2026-04-30",
+                 *         "message": "Дата 01.07.2026 вне области определения модели catboost, доступно до 30.04.2026",
                  *         "field": "to"
                  *       }
                  *     }
