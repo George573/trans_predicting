@@ -1,15 +1,21 @@
 package api
 
 import (
+	"bytes"
+	"cmp"
+	"compress/gzip"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"maps"
 	"math"
+	"mime"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -31,10 +37,10 @@ type Server struct {
 	engines    []*forecast.Engine
 	catalog    *conditions.Catalog
 	user, pass string
-	geo        []byte
+	geo        asset
 	routes     []routeOut
 	stats      *Stats
-	static     string
+	static     map[string]asset
 }
 
 type apiError struct {
@@ -58,22 +64,24 @@ func New(engines []*forecast.Engine, catalog *conditions.Catalog, cfg Config) (*
 	if len(engines) == 0 {
 		return nil, errors.New("нет ни одной модели")
 	}
-	s := &Server{engines: engines, catalog: catalog, stats: newStats(), static: cfg.Static}
+	s := &Server{engines: engines, catalog: catalog, stats: newStats()}
 	if cfg.Auth != "" {
 		var ok bool
 		if s.user, s.pass, ok = strings.Cut(cfg.Auth, ":"); !ok || s.user == "" || s.pass == "" {
 			return nil, errors.New("auth должен быть в виде логин:пароль")
 		}
 	}
+	var err error
 	if cfg.Static != "" {
-		if _, err := os.Stat(filepath.Join(cfg.Static, "index.html")); err != nil {
-			return nil, fmt.Errorf("папка интерфейса %s: нет index.html", cfg.Static)
+		if s.static, err = loadStatic(cfg.Static); err != nil {
+			return nil, err
 		}
 	}
-	var err error
-	if s.geo, err = os.ReadFile(cfg.GeoPath); err != nil {
+	raw, err := os.ReadFile(cfg.GeoPath)
+	if err != nil {
 		return nil, err
 	}
+	s.geo = newAsset(raw, time.Now())
 	var geo struct {
 		Features []struct {
 			Properties struct {
@@ -84,7 +92,7 @@ func New(engines []*forecast.Engine, catalog *conditions.Catalog, cfg Config) (*
 			} `json:"properties"`
 		} `json:"features"`
 	}
-	if err := json.Unmarshal(s.geo, &geo); err != nil {
+	if err := json.Unmarshal(raw, &geo); err != nil {
 		return nil, fmt.Errorf("%s: %w", cfg.GeoPath, err)
 	}
 	for _, r := range features.Routes {
@@ -117,10 +125,10 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/model", s.model)
 	api.HandleFunc("GET /geo/routes.geojson", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/geo+json")
-		w.Write(s.geo)
+		s.geo.serve(w, r, "routes.geojson")
 	})
 	var h http.Handler = api
-	if s.static != "" {
+	if s.static != nil {
 		h = spa(s.static, api)
 	}
 	root := http.NewServeMux()
@@ -216,17 +224,97 @@ func rounded(in []conditions.Applied) []conditions.Applied {
 	return out
 }
 
-func spa(dir string, api http.Handler) http.Handler {
-	files := http.FileServer(http.Dir(dir))
+func spa(files map[string]asset, api http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead || strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/geo/") {
 			api.ServeHTTP(w, r)
 			return
 		}
-		if st, err := os.Stat(filepath.Join(dir, filepath.Clean("/"+r.URL.Path))); err != nil || st.IsDir() {
-			r = r.Clone(r.Context())
-			r.URL.Path = "/"
+		name := path.Clean("/" + r.URL.Path)
+		a, ok := files[name]
+		switch {
+		case strings.HasPrefix(name, "/assets/") && !ok:
+			http.NotFound(w, r)
+			return
+		case strings.HasPrefix(name, "/assets/"):
+			w.Header().Set("Cache-Control", "max-age=31536000, immutable")
+		default:
+			if !ok {
+				name, a = "/index.html", files["/index.html"]
+			}
+			w.Header().Set("Cache-Control", "no-cache")
 		}
-		files.ServeHTTP(w, r)
+		a.serve(w, r, name)
 	})
+}
+
+type asset struct {
+	raw, gz []byte
+	mod     time.Time
+}
+
+func newAsset(raw []byte, mod time.Time) asset {
+	var b bytes.Buffer
+	zw, _ := gzip.NewWriterLevel(&b, gzip.BestCompression)
+	zw.Write(raw)
+	zw.Close()
+	a := asset{raw: raw, mod: mod}
+	if b.Len() < len(raw)*9/10 {
+		a.gz = b.Bytes()
+	}
+	return a
+}
+
+func loadStatic(dir string) (map[string]asset, error) {
+	files := map[string]asset{}
+	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		raw, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(dir, p)
+		if err != nil {
+			return err
+		}
+		files["/"+filepath.ToSlash(rel)] = newAsset(raw, info.ModTime())
+		return nil
+	})
+	if _, ok := files["/index.html"]; err != nil || !ok {
+		return nil, fmt.Errorf("папка интерфейса %s: нет index.html", dir)
+	}
+	return files, nil
+}
+
+func (a asset) serve(w http.ResponseWriter, r *http.Request, name string) {
+	body := a.raw
+	if a.gz != nil {
+		w.Header().Add("Vary", "Accept-Encoding")
+		if acceptsGzip(r) {
+			if w.Header().Get("Content-Type") == "" {
+				w.Header().Set("Content-Type", cmp.Or(mime.TypeByExtension(path.Ext(name)), http.DetectContentType(a.raw)))
+			}
+			w.Header().Set("Content-Encoding", "gzip")
+			body = a.gz
+		}
+	}
+	http.ServeContent(w, r, name, a.mod, bytes.NewReader(body))
+}
+
+func acceptsGzip(r *http.Request) bool {
+	for part := range strings.SplitSeq(r.Header.Get("Accept-Encoding"), ",") {
+		name, params, _ := strings.Cut(part, ";")
+		if strings.TrimSpace(name) == "gzip" {
+			q, ok := strings.CutPrefix(strings.ReplaceAll(params, " ", ""), "q=")
+			v, err := strconv.ParseFloat(q, 64)
+			return !ok || err != nil || v > 0
+		}
+	}
+	return false
 }
