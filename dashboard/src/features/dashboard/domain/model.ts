@@ -5,7 +5,7 @@ import type { ForecastResponse } from "./season";
 export type ModelName = components["schemas"]["ModelName"];
 export type ModelInfo = components["schemas"]["ModelInfo"];
 
-export const modelTitles: Record<ModelName, string> = { catboost: "CatBoost", cnn: "CNN" };
+export const modelTitles: Record<ModelName, string> = { catboost: "Резервная (ML)", cnn: "Основная (CNN)" };
 
 export function recursiveFrom(info?: ModelInfo): string | null {
   return typeof info?.recursive_from === "string" ? info.recursive_from : null;

@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { Alert, Badge, Button, Group, Paper, ScrollArea, Select, Skeleton, Stack, Table, Text, Title } from "@mantine/core";
+import { Alert, Badge, Button, Group, ScrollArea, Select, Skeleton, Stack, Table, Text } from "@mantine/core";
+import { Panel } from "../panel";
 import { fetchClient } from "@/shared/api/instance";
 import type { components } from "@/shared/api/schema/generated";
 import type { ForecastRequest, ForecastResponse } from "../../model/forecast-state";
 import { formatDate } from "@/features/scenario";
 import { momentAt } from "../../lib/moment";
+import { modelTitles, type ModelName } from "../../domain/model";
 
 type ExplainResponse = components["schemas"]["ExplainResponse"];
 type Props = { data: ForecastResponse; request: ForecastRequest | null; selectedIndex: number; route: number | null; onRoute: (route: number | null) => void };
@@ -50,9 +52,8 @@ export function PointBreakdown({ data, request, selectedIndex, route, onRoute }:
     return () => controller.abort();
   }, [askedRoute, askedDate, askedHour, context, revision]);
 
-  return <Paper p="md" withBorder>
+  return <Panel title="Разбор точки" note="шаги модели">
     <Stack gap="xs">
-      <Title order={6}>Разбор точки</Title>
       <Group gap="xs" align="end">
         {routes.length > 1 && <Select size="xs" w={140} label="Маршрут" placeholder="выберите" value={askedRoute === null ? null : String(askedRoute)} onChange={(value) => onRoute(value === null ? null : Number(value))} data={routes.map((item) => String(item))} />}
         {data.step === "1mo" && <Select size="xs" w={140} label="Дата" placeholder="выберите" value={day} onChange={setDay} data={Array.from({ length: moment.daysInMonth() }, (_, index) => { const value = moment.date(index + 1).format("YYYY-MM-DD"); return { value, label: formatDate(value) }; })} />}
@@ -64,7 +65,7 @@ export function PointBreakdown({ data, request, selectedIndex, route, onRoute }:
       {loading && <Skeleton height={120} />}
       {error && <Alert color="red" p="xs">{error}<Button size="compact-xs" ml="sm" onClick={() => retry((value) => value + 1)}>Повторить</Button></Alert>}
       {result && !loading && <Stack gap="xs">
-        <Table withTableBorder={false} verticalSpacing={2} fz="xs">
+        <Table.ScrollContainer minWidth={420} type="native"><Table withTableBorder={false} verticalSpacing={2} fz="xs">
           <Table.Thead><Table.Tr><Table.Th>Шаг</Table.Th><Table.Th>Подробность</Table.Th><Table.Th>Множитель</Table.Th><Table.Th>Значение</Table.Th></Table.Tr></Table.Thead>
           <Table.Tbody>{result.steps.map((step, index) => <Table.Tr key={index}>
             <Table.Td>{step.step}</Table.Td>
@@ -72,9 +73,9 @@ export function PointBreakdown({ data, request, selectedIndex, route, onRoute }:
             <Table.Td>{step.factor === null || step.factor === undefined ? "нет" : step.factor}</Table.Td>
             <Table.Td>{amount(step.value)}</Table.Td>
           </Table.Tr>)}</Table.Tbody>
-        </Table>
-        <Text size="sm">Итог: {amount(result.value)} · модель {result.model}</Text>
-        {result.conditions.length > 0 && <Table withTableBorder={false} verticalSpacing={2} fz="xs">
+        </Table></Table.ScrollContainer>
+        <Text size="sm">Итог: {amount(result.value)} · модель {modelTitles[result.model as ModelName] ?? result.model}</Text>
+        {result.conditions.length > 0 && <Table.ScrollContainer minWidth={420} type="native"><Table withTableBorder={false} verticalSpacing={2} fz="xs">
           <Table.Thead><Table.Tr><Table.Th>Условие за сутки</Table.Th><Table.Th>Состояние</Table.Th><Table.Th>Множитель</Table.Th><Table.Th>Вклад</Table.Th><Table.Th>Часов</Table.Th></Table.Tr></Table.Thead>
           <Table.Tbody>{result.conditions.map((condition) => <Table.Tr key={condition.id}>
             <Table.Td>{condition.id}</Table.Td>
@@ -83,11 +84,11 @@ export function PointBreakdown({ data, request, selectedIndex, route, onRoute }:
             <Table.Td>{condition.applied ? `${condition.contribution_pct}%` : "-"}</Table.Td>
             <Table.Td>{condition.points}</Table.Td>
           </Table.Tr>)}</Table.Tbody>
-        </Table>}
+        </Table></Table.ScrollContainer>}
         {result.warnings.map((warning, index) => <Alert key={index} color="yellow" p="xs">{warning.message}</Alert>)}
         <Text size="xs" c="dimmed">Календарь: {Object.entries(result.calendar).map(([key, value]) => `${key} = ${key === "date" ? formatDate(String(value)) : String(value)}`).join(", ")}</Text>
         <ScrollArea.Autosize mah={140}>
-          <Table withTableBorder={false} verticalSpacing={1} fz="xs">
+          <Table.ScrollContainer minWidth={420} type="native"><Table withTableBorder={false} verticalSpacing={1} fz="xs">
             <Table.Thead><Table.Tr><Table.Th>Признак</Table.Th><Table.Th>Значение</Table.Th><Table.Th>Вид</Table.Th><Table.Th>Хеш</Table.Th></Table.Tr></Table.Thead>
             <Table.Tbody>{result.features.map((feature) => <Table.Tr key={feature.name}>
               <Table.Td>{feature.name}</Table.Td>
@@ -95,9 +96,9 @@ export function PointBreakdown({ data, request, selectedIndex, route, onRoute }:
               <Table.Td>{feature.kind ?? ""}</Table.Td>
               <Table.Td>{feature.hash ?? ""}</Table.Td>
             </Table.Tr>)}</Table.Tbody>
-          </Table>
+          </Table></Table.ScrollContainer>
         </ScrollArea.Autosize>
       </Stack>}
     </Stack>
-  </Paper>;
+  </Panel>;
 }

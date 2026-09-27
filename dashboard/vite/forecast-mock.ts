@@ -125,7 +125,7 @@ export function forecastMock(): Plugin {
               calendar: { weekday: 2, holiday: false, school_vacation: false },
               features: [ { name: "hour_sin", value: 0.866, kind: "float" }, { name: "hour_cos", value: -0.5, kind: "float" }, { name: "weekday", value: 2, kind: "categorical", hash: 2 }, { name: "route", value: asked.route ?? 7, kind: "categorical", hash: 7 } ],
               steps: [ { step: "сырой выход модели", factor: null, value: raw }, { step: "обрезка нуля", factor: null, value: raw }, { step: "калибровка по дню недели", factor: 1.02, value: Math.round(raw * 1.02) }, { step: "условие c1 - дождь", detail: "1.2 мм/ч", factor: 0.936, value: Math.round(raw * 1.02 * 0.936) } ],
-              value: Math.round(raw * 1.02 * 0.936),
+              value: Math.round(raw * 1.02 * 0.936), model: "catboost", conditions: [], warnings: [],
             });
           });
           return;

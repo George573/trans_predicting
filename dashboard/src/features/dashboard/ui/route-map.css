@@ -1,0 +1,15 @@
+.leaflet-tooltip.map-tip {
+  padding: 8px 10px;
+  border: 1px solid #3a4655;
+  border-radius: 6px;
+  background: #0a0d11;
+  color: #e6eaee;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  white-space: nowrap;
+}
+.leaflet-tooltip.map-tip::before { display: none; }
+.map-tip .tip-head { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.map-tip .tip-badge { padding: 0 4px; border-radius: 3px; background: #e6eaee; color: #0e1217; font-family: "IBM Plex Mono", monospace; font-weight: 600; }
+.map-tip .tip-value { margin-top: 2px; font-family: "IBM Plex Mono", monospace; font-size: 14px; font-weight: 600; }
+.map-tip .tip-note { margin-top: 2px; font-size: 11px; color: #9aa5b1; }

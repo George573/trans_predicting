@@ -1,5 +1,6 @@
+import { Panel } from "../panel";
 import { Fragment } from "react";
-import { Group, Paper, ScrollArea, Stack, Text, Title } from "@mantine/core";
+import { Group, ScrollArea, Stack, Text } from "@mantine/core";
 import type { ForecastResponse, Route } from "../../model/forecast-state";
 import { routeLevel } from "../../lib/level";
 import { momentAt, momentLabel, quantityLabel } from "../../lib/moment";
@@ -11,9 +12,8 @@ export function RoutesHeatmap({ data, routes, selectedIndex, selectIndex, route,
   const labelEvery = Math.max(1, Math.ceil(points / 24));
   const shortLabel = (index: number) => momentAt(data, index).format(data.step === "1h" ? "HH" : data.step === "1d" ? "DD" : "MM");
 
-  return <Paper p="md" withBorder>
+  return <Panel title="Маршруты и время" note="% от обычного уровня">
     <Stack gap="xs">
-      <Title order={6}>Маршруты и время</Title>
       <Text size="xs" c="dimmed">Цвет - % от обычного уровня, та же шкала, что на карте. Число в подсказке - {quantityLabel(data.step)}.</Text>
       <Group gap="md">
         {[{ color: "#3bb8a3", label: "ниже 80% от обычного уровня" }, { color: "#e3b350", label: "80-120% от обычного уровня" }, { color: "#ef6b73", label: "выше 120% от обычного уровня" }, { color: "#778899", label: "нет сравнения" }].map((item) =>
@@ -56,5 +56,5 @@ export function RoutesHeatmap({ data, routes, selectedIndex, selectIndex, route,
       </ScrollArea>
       <Text size="xs" c="dimmed">Клетка выбирает маршрут и момент для разбора и карты, нового прогноза не запрашивает. Тёмная рамка внутри клетки - превышение верхней границы коридора; при выключенном коридоре её нет. Штриховка - данных нет, это не ноль.</Text>
     </Stack>
-  </Paper>;
+  </Panel>;
 }

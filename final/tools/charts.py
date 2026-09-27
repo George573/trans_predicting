@@ -238,66 +238,26 @@ def rain_by_route():
     save(fig, "rain_by_route")
 
 
-def perf_rps():
-    rows = [("Python ONNX\n+ Go", 3700, 5.74, 150), ("два процесса\nраннера", 4650, 5.39, 205),
-            ("голова CNN\nв Go", 23200, 1.24, 11), ("+ блоки\nпо 4 строки", 27500, 1.02, 11),
-            ("+ softplus\nмногочленом", 30000, 0.91, 9)]
-    fig, axes = plt.subplots(1, 2, figsize=(11, 3.8), constrained_layout=True)
-    x = np.arange(len(rows))
-    colors = [GREY, GREY, GREEN, GREEN, GREEN]
-    axes[0].bar(x, [r[1] for r in rows], color=colors, width=0.6)
-    for xi, r in zip(x, rows):
-        axes[0].text(xi, r[1] + 400, f"{r[1]:,}".replace(",", " "), ha="center", fontsize=8)
-    axes[0].set_xticks(x, [r[0] for r in rows], fontsize=8)
-    style(axes[0], ylabel="максимальный RPS", title="Пропускная способность, 2 ядра")
-    axes[1].bar(x, [r[2] for r in rows], color=colors, width=0.6)
-    for xi, r in zip(x, rows):
-        axes[1].text(xi, r[2] + 0.1, f"{r[2]:.2f} мс\n{r[3]} МБ", ha="center", fontsize=8)
-    axes[1].set_xticks(x, [r[0] for r in rows], fontsize=8)
-    axes[1].set_ylim(0, 7)
-    style(axes[1], ylabel="p95 при 8 потоках, мс", title="Задержка и память")
-    save(fig, "perf_rps")
-
-
-def perf_catboost():
-    rows = [("1 vCPU,\n1000 RPS", 1000, 1.8, 32, 57), ("1 vCPU,\nмаксимум", 1747, 8.0, 23, 32),
-            ("2 vCPU,\nмаксимум", 2432, 4.6, 20, 32)]
-    fig, ax = plt.subplots(figsize=(7, 3.6), constrained_layout=True)
-    x = np.arange(len(rows))
-    for off, idx, name, color in [(-0.25, 2, "p50", GREEN), (0, 3, "p95", GOLD),
-                                  (0.25, 4, "p99", RED)]:
-        ax.bar(x + off, [r[idx] for r in rows], 0.24, color=color, label=name)
-    for xi, r in zip(x, rows):
-        ax.text(xi, max(r[2:]) + 3, f"{r[1]} RPS", ha="center", fontsize=9)
-    ax.set_xticks(x, [r[0] for r in rows], fontsize=8)
-    ax.set_ylim(0, 70)
-    style(ax, ylabel="задержка, мс", title="Резерв: CatBoost в Go, микс запросов диспетчера")
-    ax.legend(frameon=False, fontsize=8)
-    save(fig, "perf_catboost")
-
-
 def perf_load():
-    series = [
-        ("прод, 2 vCPU", RED, [100, 200, 300, 400], [15.29, 15.22, 28.76, 51.46],
-         [55.01, 55.12, 65.32, 114.43], [37, 65, 92, 121]),
-        ("M4, 2 ядра", GOLD, [100, 200, 300, 400], [11.46, 10.43, 10.73, 11.31],
-         [49.32, 39.05, 36.05, 32.50], [30.5, 45.2, 54.9, 67.8]),
-        ("M4, 10 ядер", BLUE, [100, 200, 300, 400, 500, 1000],
-         [11.39, 7.99, 7.05, 6.99, 6.93, 6.75], [45.98, 38.15, 33.69, 30.41, 29.68, 30.05],
-         [28.2, 41.1, 54.8, 66.8, 85.3, 164.5]),
-    ]
+    rps = [100, 200, 300, 400]
+    p95, p99, cpu = [15.29, 15.22, 28.76, 51.46], [55.01, 55.12, 65.32, 114.43], [37, 65, 92, 121]
     fig, axes = plt.subplots(1, 2, figsize=(11, 4), constrained_layout=True)
-    for name, color, rps, p95, p99, cpu in series:
-        axes[0].plot(rps, p95, "o-", color=color, label=f"{name}, p95")
-        axes[0].plot(rps, p99, "o--", color=color, alpha=0.6, label=f"{name}, p99")
-        axes[1].plot(rps, cpu, "o-", color=color, label=name)
-    axes[1].axhspan(120, 160, color=GREEN, alpha=0.15,
-                    label="60-80% от 2 ядер (120-160% ядра)")
-    style(axes[0], "заданный RPS, открытый цикл", "задержка, мс", "Задержка p95 и p99 (пунктир)")
+    axes[0].plot(rps, p95, "o-", color=RED, label="p95")
+    axes[0].plot(rps, p99, "o--", color=RED, alpha=0.6, label="p99")
+    for x, y in zip(rps, p95):
+        axes[0].text(x, y + 4, f"{y:.1f}", ha="center", fontsize=8)
+    axes[0].set_ylim(0, 130)
+    axes[0].text(105, 122, "порог кейса: p95 < 200-300 мс", fontsize=8, color=GREY)
+    axes[1].plot(rps, cpu, "o-", color=RED, label="CPU сервера")
+    for x, y in zip(rps, cpu):
+        axes[1].text(x, y + 5, f"{y}%", ha="center", fontsize=8)
+    axes[1].axhspan(120, 160, color=GREEN, alpha=0.15, label="60-80% от 2 vCPU (120-160% ядра)")
+    axes[1].set_ylim(0, 200)
+    style(axes[0], "заданный RPS, открытый цикл", "задержка, мс", "Задержка, прод 2 vCPU, 0 ошибок")
     style(axes[1], "заданный RPS, открытый цикл", "CPU сервера, % одного ядра",
           "Утилизация CPU и зона кейса")
-    axes[0].legend(frameon=False, fontsize=7, ncol=2)
-    axes[1].legend(frameon=False, fontsize=8)
+    axes[0].legend(frameon=False, fontsize=8)
+    axes[1].legend(frameon=False, fontsize=8, loc="upper left")
     save(fig, "perf_load")
 
 
@@ -322,6 +282,6 @@ if __name__ == "__main__":
     IMG.mkdir(parents=True, exist_ok=True)
     for fn in (score_progress, cnn_training, backtest_vs_target, ml_steps, geo_levels,
                geo_configs, geo_warmup, calendar_effects, weather_traffic_effects,
-               rain_by_route, perf_rps, perf_catboost, perf_load, perf_heavy):
+               rain_by_route, perf_load, perf_heavy):
         fn()
     print("\n".join(sorted(p.name for p in IMG.glob("*.svg"))))

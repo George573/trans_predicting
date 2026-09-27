@@ -1,17 +1,29 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
-import { Alert, Group, Paper, Text, Title } from "@mantine/core";
+import { Alert, Group, Text } from "@mantine/core";
+import { Panel } from "./panel";
 import type { ForecastResponse, Route } from "../model/forecast-state";
 import { apiBaseUrl, authorizedFetch } from "@/shared/api/instance";
 import { routeColor, routeLevel } from "../lib/level";
 import { momentLabel, quantityLabel } from "../lib/moment";
+import "@maplibre/maplibre-gl-leaflet";
 import "leaflet/dist/leaflet.css";
+import "./route-map.css";
+import "maplibre-gl/dist/maplibre-gl.css";
 
-type Props = { routes: Route[]; selected: number[]; onSelect: (route: number) => void; data: ForecastResponse; selectedIndex: number };
+const basemapStyle = "https://tiles.versatiles.org/assets/styles/gray-dark/style.json";
+
+type Props = { routes: Route[]; selected: number[]; onSelect: (route: number) => void; data: ForecastResponse; selectedIndex: number; height?: string };
+const tip = { sticky: true, direction: "right" as const, offset: [14, 0] as [number, number], className: "map-tip", opacity: 1 };
+const escape = (text: string) => text.replace(/[&<>"]/g, (char) => `&#${char.charCodeAt(0)};`);
+function tipHtml(head: string, value: string, color: string, note: string, route?: number) {
+  return `<div class="tip-head">${route === undefined ? "" : `<span class="tip-badge">${route}</span>`}${escape(head)}</div><div class="tip-value" style="color:${color}">${escape(value)}</div><div class="tip-note">${escape(note)}</div>`;
+}
+
 type Feature = { type: "Feature"; properties: { kind: "line" | "stop"; route: number; name?: string; source?: string }; geometry: { type: "MultiLineString" | "Point"; coordinates: unknown } };
 type FeatureCollection = { type: "FeatureCollection"; features: Feature[] };
 
-export function RouteMap({ routes, selected, onSelect, data, selectedIndex }: Props) {
+export function RouteMap({ routes, selected, onSelect, data, selectedIndex, height = "clamp(420px, calc(100dvh - 260px), 900px)" }: Props) {
   const element = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
   const lines = useRef<L.GeoJSON | null>(null);
@@ -23,12 +35,12 @@ export function RouteMap({ routes, selected, onSelect, data, selectedIndex }: Pr
 
   useEffect(() => {
     if (!element.current) return;
-    const instance = L.map(element.current, { zoomControl: true, attributionControl: true }).setView([55.75, 37.62], 10);
-    instance.attributionControl.setPrefix(false);
-    instance.getPane("tilePane")!.style.filter = "grayscale(1) invert(1) brightness(0.7) contrast(0.8)";
+    const instance = L.map(element.current, { zoomControl: true, attributionControl: false, maxZoom: 20 }).setView([55.75, 37.62], 10);
     map.current = instance;
-    if (navigator.onLine) L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap", maxZoom: 18 }).addTo(instance);
-    return () => { instance.remove(); map.current = null; };
+    const resize = new ResizeObserver(() => instance.invalidateSize());
+    resize.observe(element.current);
+    if (navigator.onLine) L.maplibreGL({ style: basemapStyle }).addTo(instance);
+    return () => { resize.disconnect(); instance.remove(); map.current = null; };
   }, []);
 
   useEffect(() => {
@@ -65,7 +77,7 @@ export function RouteMap({ routes, selected, onSelect, data, selectedIndex }: Pr
         const series = data.series.find((entry) => entry.route === route);
         const value = series?.value[selectedIndex];
         const level = routeLevel(value, series?.usual[selectedIndex]);
-        item.bindTooltip(`Маршрут ${route} · ${momentLabel(data, selectedIndex)} · ${value === undefined ? "нет прогноза" : `${Math.round(value).toLocaleString("ru-RU")} (${quantityLabel(data.step)})`} · ${level.label}`);
+        item.bindTooltip(tipHtml(momentLabel(data, selectedIndex), value === undefined ? "нет прогноза" : level.percent === null ? Math.round(value).toLocaleString("ru-RU") : `${Math.round(level.percent)}% · ${Math.round(value).toLocaleString("ru-RU")}`, value === undefined ? "#9aa5b1" : level.color, value === undefined ? "маршрут вне ответа" : `${quantityLabel(data.step)} · % от обычного уровня`, route), tip);
         item.on("click", () => onSelect(route));
       },
     }).addTo(map.current);
@@ -76,7 +88,7 @@ export function RouteMap({ routes, selected, onSelect, data, selectedIndex }: Pr
       const series = data.series.find((entry) => entry.route === route);
       if (!series?.hi || series.value[selectedIndex] <= series.hi[selectedIndex]) return;
       const bounds = (item as L.Polyline).getBounds();
-      if (bounds.isValid()) L.circleMarker(bounds.getCenter(), { radius: 10, color: "#ef6b73", fillOpacity: 0, weight: 3 }).bindTooltip(`Маршрут ${route}: выше верхней границы коридора. Кольцо отмечает маршрут в целом.`).addTo(ringLayer);
+      if (bounds.isValid()) L.circleMarker(bounds.getCenter(), { radius: 10, color: "#ef6b73", fillOpacity: 0, weight: 3 }).bindTooltip(tipHtml(momentLabel(data, selectedIndex), "выше коридора", "#ff9c8f", "кольцо отмечает маршрут в целом", route), tip).addTo(ringLayer);
     });
     rings.current = ringLayer;
     const shown = `${[...allowed].sort().join(",")}|${[...selected].sort().join(",")}`;
@@ -95,23 +107,19 @@ export function RouteMap({ routes, selected, onSelect, data, selectedIndex }: Pr
     const visible: FeatureCollection = { type: "FeatureCollection", features: geometry.features.filter((feature) => feature.properties.kind === "stop" && available.has(feature.properties.route as Route["route"]) && selected.includes(feature.properties.route)) };
     const layer = L.geoJSON(visible as unknown as Parameters<typeof L.geoJSON>[0], {
       pointToLayer: (_, latlng) => L.circleMarker(latlng, { radius: 3.5, color: "#05090d", weight: 1.5, fillColor: "#f1f5f9", fillOpacity: 1 }),
-      onEachFeature: (feature, item) => { if (feature.properties?.name) item.bindTooltip(String(feature.properties.name)); },
+      onEachFeature: (feature, item) => { if (feature.properties?.name) item.bindTooltip(tipHtml("остановка", String(feature.properties.name), "#e6eaee", "только геометрия, без данных о посадках"), tip); },
     }).addTo(map.current);
     stopLayer.current = layer;
     return () => { layer.remove(); };
   }, [geometry, routes, selected]);
 
   const missing = routes.filter((route) => route.has_geometry && geometry && !geometry.features.some((feature) => feature.properties.kind === "line" && feature.properties.route === route.route));
-  return <Paper p="md" withBorder>
-    <Title order={6} mb="sm">Карта маршрутов</Title>
+  return <Panel title="Карта" note={selected.length ? `маршрут ${selected[0]} · ${momentLabel(data, selectedIndex)}` : `вся сеть · ${momentLabel(data, selectedIndex)}`}>
     {error && <Alert color="yellow" mb="sm">{error}. Маршруты доступны в списке и графиках.</Alert>}
     {geometry && selected.length > 0 && !geometry.features.some((feature) => feature.properties.kind === "stop" && selected.includes(feature.properties.route)) && <Text size="xs" c="dimmed">Для выбранных маршрутов нет остановок в геометрии.</Text>}
     {missing.length > 0 && <Text size="xs" c="dimmed" mb="xs">Нет линии для маршрутов: {missing.map((route) => route.route).join(", ")}</Text>}
-    <div ref={element} style={{ height: "clamp(420px, 62vh, 760px)", background: "#10151b", borderRadius: 8 }} aria-label="Карта трамвайных маршрутов" />
+    <div ref={element} style={{ height, minHeight: 360, background: "#10151b", borderRadius: 8 }} aria-label="Карта трамвайных маршрутов" />
     <Group gap="md" mt="xs">{routes.filter((route) => route.has_geometry).map((route) => <Group key={route.route} gap={6} wrap="nowrap"><div style={{ width: 16, height: 4, borderRadius: 2, background: routeColor(routes, route.route) }} /><Text size="xs">{route.route}</Text></Group>)}</Group>
     <Text size="xs" c="dimmed">Процент от обычного уровня - в подсказке при наведении на линию.</Text>
-    <Text size="xs" c="dimmed">Кольцо - превышение верхней границы коридора по маршруту в целом.</Text>
-    <Text size="xs" c="dimmed">Остановки показываются у выбранных маршрутов, только как геометрия, без данных о посадках.</Text>
-    <Text size="xs" c="dimmed">Геометрия маршрутов и остановок: справочник и © OpenStreetMap, локальная копия из сервиса.</Text>
-  </Paper>;
+  </Panel>;
 }

@@ -13,13 +13,13 @@ export type ForecastFailure = { message: string; field?: string; source: "зап
 type Action = { type: "routes"; routes: number[] }
   | { type: "conditions"; conditions: ForecastRequest["conditions"] } | { type: "period"; from: string; to: string; horizon: ForecastRequest["horizon"]; granularity: ForecastRequest["granularity"] }
   | { type: "model"; model: ModelName; from: string; to: string };
-export const initialRequest: ForecastRequest = { routes: [], from: "2025-11-10", to: "2025-11-10", horizon: "day", granularity: "hour", corridor: true, conditions: [] };
+export const initialRequest: ForecastRequest = { model: "cnn", routes: [], from: "2025-11-10", to: "2025-11-10", horizon: "day", granularity: "hour", corridor: true, conditions: [] };
 
 function reducer(state: ForecastRequest, action: Action): ForecastRequest {
   if (action.type === "conditions") return { ...state, conditions: action.conditions };
   if (action.type === "period") return { ...state, from: action.from, to: action.to, horizon: action.horizon, granularity: action.granularity };
   if (action.type === "model") return { ...state, model: action.model, from: action.from, to: action.to };
-  return { ...state, routes: action.routes as ForecastRequest["routes"] };
+  return { ...state, routes: action.routes.slice(0, 1) as ForecastRequest["routes"] };
 }
 
 const structuralPart = ({ model, routes, from, to, horizon, granularity, corridor }: ForecastRequest) => JSON.stringify([model, routes, from, to, horizon, granularity, corridor]);

@@ -1,4 +1,5 @@
-import { Alert, Anchor, Badge, Button, Group, Paper, Stack, Table, Text, Title } from "@mantine/core";
+import { Alert, Anchor, Badge, Button, Group, Stack, Table, Text } from "@mantine/core";
+import { Panel } from "../panel";
 import type { ForecastResponse } from "../../model/forecast-state";
 import { momentLabel, quantityLabel } from "../../lib/moment";
 import type { Comparison } from "./workspace";
@@ -21,7 +22,7 @@ function exceedances(data: ForecastResponse) {
 }
 
 export function Summary({ data, comparison, selectIndex, onRouteSelect }: Props) {
-  if (data.series.length === 0) return <Paper p="md" withBorder><Title order={6}>Цифры и тревоги</Title><Text size="sm" c="dimmed">Нет данных: сервис вернул прогноз без рядов.</Text></Paper>;
+  if (data.series.length === 0) return <Panel title="Цифры и тревоги"><Text size="sm" c="dimmed">Нет данных: сервис вернул прогноз без рядов.</Text></Panel>;
   const total = data.series.reduce((sum, series) => sum + series.total, 0);
   const baseTotal = data.series.reduce((sum, series) => sum + series.base_total, 0);
   const difference = total - baseTotal;
@@ -31,9 +32,8 @@ export function Summary({ data, comparison, selectIndex, onRouteSelect }: Props)
   const shown = alerts.slice(0, 12);
   const otherTotal = comparison?.data.series.filter((series) => data.series.some((item) => item.route === series.route)).reduce((sum, series) => sum + series.total, 0);
 
-  return <Paper p="md" withBorder>
+  return <Panel title="Цифры и тревоги" note={data.series.length === 1 ? `маршрут ${data.series[0].route}` : "сеть"}>
     <Stack gap="sm">
-      <Title order={6}>Цифры и тревоги</Title>
 
       <Stack gap={2}>
         <Text>Посадки за период: {amount(total)}</Text>
@@ -58,7 +58,7 @@ export function Summary({ data, comparison, selectIndex, onRouteSelect }: Props)
           ? <Text size="sm" c="dimmed">{data.step === "1mo" ? "Месячного коридора нет: суточные границы в месячную ширину не складываются, поэтому тревог по месяцам нет." : "Коридор не запрошен: границ hi в ответе нет, поэтому тревоги недоступны."} Это не значит, что превышений нет.</Text>
           : alerts.length === 0
             ? <Text size="sm" c="dimmed">Превышений нет: ни одна точка не вышла за верхнюю границу.</Text>
-            : <Table withTableBorder={false} verticalSpacing={2} fz="xs">
+            : <Table.ScrollContainer minWidth={420} type="native"><Table withTableBorder={false} verticalSpacing={2} fz="xs">
                 <Table.Thead><Table.Tr><Table.Th>Маршрут</Table.Th><Table.Th>Момент</Table.Th><Table.Th>Прогноз</Table.Th><Table.Th>Верх</Table.Th><Table.Th /></Table.Tr></Table.Thead>
                 <Table.Tbody>{shown.map((alert) => <Table.Tr key={`${alert.route}-${alert.index}`}>
                   <Table.Td>{alert.route}</Table.Td>
@@ -67,7 +67,7 @@ export function Summary({ data, comparison, selectIndex, onRouteSelect }: Props)
                   <Table.Td>{amount(alert.hi)}</Table.Td>
                   <Table.Td><Group gap={4} wrap="nowrap"><Button size="compact-xs" variant="subtle" onClick={() => selectIndex(alert.index)}>момент</Button>{data.series.length > 1 && <Button size="compact-xs" variant="subtle" onClick={() => onRouteSelect(alert.route)}>маршрут</Button>}</Group></Table.Td>
                 </Table.Tr>)}</Table.Tbody>
-              </Table>}
+              </Table></Table.ScrollContainer>}
         {alerts.length > shown.length && <Text size="xs" c="dimmed">Показаны первые {shown.length} из {alerts.length}.</Text>}
         {withCorridor.length > 0 && withCorridor.length < data.series.length && <Text size="xs" c="dimmed">Границы пришли не по всем маршрутам: тревоги посчитаны по {withCorridor.length} из {data.series.length}.</Text>}
       </Stack>
@@ -77,5 +77,5 @@ export function Summary({ data, comparison, selectIndex, onRouteSelect }: Props)
         {data.warnings.map((warning, index) => <Alert key={index} color="yellow" p="xs">{warning.message}</Alert>)}
       </Stack>}
     </Stack>
-  </Paper>;
+  </Panel>;
 }

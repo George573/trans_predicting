@@ -1,4 +1,5 @@
-import { Paper, Stack, Text, Title } from "@mantine/core";
+import { Paper, Stack, Text } from "@mantine/core";
+import { Panel } from "../panel";
 import { CompositeChart } from "@mantine/charts";
 import type { ForecastResponse } from "../../model/forecast-state";
 import { momentAt, momentLabel, quantityLabel } from "../../lib/moment";
@@ -23,9 +24,8 @@ export function ForecastChart({ data, comparison, recursive, selectedIndex, sele
     ...(bounds && { band: [bounds.lo[index], bounds.hi[index]] as [number, number] }),
   }));
 
-  return <Paper p="md" withBorder>
+  return <Panel title="Прогноз посадок" note={single ? `маршрут ${single.route}` : "сумма по сети"}>
     <Stack gap="xs">
-      <Title order={6}>Прогноз посадок: {single ? `маршрут ${single.route}` : `сумма маршрутов ${data.series.map((series) => series.route).join(", ")}`}</Title>
       <Text size="xs" c="dimmed">Величина: {quantityLabel(data.step)}. Выбранный момент: {points.length > 0 ? momentLabel(data, Math.min(selectedIndex, points.length - 1)) : "нет точек"}</Text>
       <CompositeChart
         h={260}
@@ -57,8 +57,8 @@ export function ForecastChart({ data, comparison, recursive, selectedIndex, sele
           ...(other ? [{ name: "other", label: other.title, color: "orange.5", type: "line" as const }] : []),
         ]}
       />
-      {boundary !== null && <Text size="xs" c="dimmed">Жёлтая линия - начало авторегрессии CNN: дальше каждый день опирается на свой же прогноз.</Text>}
+      {boundary !== null && <Text size="xs" c="dimmed">Жёлтая линия - начало авторегрессии основной модели: дальше каждый день опирается на свой же прогноз.</Text>}
       {!bounds && <Text size="xs" c="dimmed">{single ? "Границы коридора не запрошены: в ответе нет lo и hi." : "Коридор не показан: общих границ для суммы маршрутов сервис не даёт, а складывать коридоры отдельных маршрутов нельзя."}</Text>}
     </Stack>
-  </Paper>;
+  </Panel>;
 }

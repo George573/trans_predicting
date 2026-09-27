@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Alert, Button, Group, Paper, Text, Title } from "@mantine/core";
+import { Alert, Button, Group, Stack, Text, Title } from "@mantine/core";
 import { apiBaseUrl, authorizedFetch } from "@/shared/api/instance";
 import type { ForecastRequest } from "../model/forecast-state";
 
@@ -51,11 +51,11 @@ export function ExportControls({ request, acceptedRequest, ready }: Props) {
     } finally { setPending(null); }
   }
 
-  return <Paper p="md" withBorder>
-    <Title order={6} mb="xs">Выгрузка текущего прогноза</Title>
-    <Group><Button disabled={!available || !!pending} loading={pending === "csv"} onClick={() => void download("csv")}>CSV</Button><Button disabled={!available || !!pending} loading={pending === "xlsx"} onClick={() => void download("xlsx")}>XLSX</Button></Group>
-    {season && <Text size="xs" c="dimmed" mt="xs">Сезон выгружается по суткам: месячные суммы на экране сложены из этих строк.</Text>}
-    {!available && <Text size="xs" c="dimmed" mt="xs">Дождитесь успешного обновления прогноза перед выгрузкой.</Text>}
-    {error && <Alert color="red" mt="xs">{error}</Alert>}
-  </Paper>;
+  return <Stack gap={8}>
+    <Title order={6}>Выгрузка</Title>
+    <Group gap={6} grow><Button size="xs" variant="default" disabled={!available || !!pending} loading={pending === "csv"} onClick={() => void download("csv")}>Экспорт CSV</Button><Button size="xs" variant="default" disabled={!available || !!pending} loading={pending === "xlsx"} onClick={() => void download("xlsx")}>Экспорт XLSX</Button></Group>
+    {season && <Text size="xs" c="dimmed" >Сезон выгружается по суткам: месячные суммы на экране сложены из этих строк.</Text>}
+    {!available && <Text size="xs" c="dimmed" >Дождитесь успешного обновления прогноза перед выгрузкой.</Text>}
+    {error && <Alert color="red" p="xs">{error}</Alert>}
+  </Stack>;
 }

@@ -1,13 +1,14 @@
-import { Paper, SimpleGrid, Stack, Text, Title } from "@mantine/core";
+import { SimpleGrid, Stack, Text } from "@mantine/core";
+import { Panel } from "./panel";
 import { BarChart, DonutChart } from "@mantine/charts";
 import type { ForecastResponse } from "../model/forecast-state";
 import { routeColor, routeLevel } from "../lib/level";
 
-type Props = { data: ForecastResponse; comparison: { title: string; data: ForecastResponse } | null; routes: { route: number }[]; onRouteSelect: (route: number) => void };
+type Props = { data: ForecastResponse; comparison: { title: string; data: ForecastResponse } | null; routes: { route: number }[]; onRouteSelect: (route: number) => void; stacked?: boolean };
 
 const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
 
-export function RouteCharts({ data, comparison, routes, onRouteSelect }: Props) {
+export function RouteCharts({ data, comparison, routes, onRouteSelect, stacked }: Props) {
   const rows = data.series.map((series) => {
     const usual = sum(series.usual);
     const other = comparison?.data.series.find((item) => item.route === series.route);
@@ -16,10 +17,9 @@ export function RouteCharts({ data, comparison, routes, onRouteSelect }: Props) 
   const total = sum(rows.map((row) => row.value));
   const select = (label?: string | number) => { const row = rows.find((item) => item.route === label); if (row) onRouteSelect(row.number); };
 
-  return <SimpleGrid cols={{ base: 1, lg: rows.length > 1 ? 3 : 2 }}>
-    <Paper p="md" withBorder>
+  return <SimpleGrid cols={stacked ? 1 : { base: 1, lg: rows.length > 1 ? 3 : 2 }} spacing={8}>
+    <Panel title="Посадки за период" note="по маршрутам">
       <Stack gap="xs">
-        <Title order={6}>Посадки за период по маршрутам</Title>
         <BarChart
           h={220}
           data={rows}
@@ -35,10 +35,9 @@ export function RouteCharts({ data, comparison, routes, onRouteSelect }: Props) 
           ]}
         />
       </Stack>
-    </Paper>
-    <Paper p="md" withBorder>
+    </Panel>
+    <Panel title="Отклонение" note="от обычного уровня">
       <Stack gap="xs">
-        <Title order={6}>Отклонение от обычного уровня</Title>
         <BarChart
           h={220}
           data={rows}
@@ -51,10 +50,9 @@ export function RouteCharts({ data, comparison, routes, onRouteSelect }: Props) 
         />
         <Text size="xs" c="dimmed">Итог прогноза за период против суммы обычного уровня, в процентах. Клик по столбцу выбирает маршрут.</Text>
       </Stack>
-    </Paper>
-    {rows.length > 1 && <Paper p="md" withBorder>
+    </Panel>
+    {rows.length > 1 && <Panel title="Доля маршрутов" note="в сумме">
       <Stack gap="xs" align="center">
-        <Title order={6} style={{ alignSelf: "flex-start" }}>Доля маршрутов в сумме</Title>
         <DonutChart
           size={180}
           thickness={28}
@@ -66,6 +64,6 @@ export function RouteCharts({ data, comparison, routes, onRouteSelect }: Props) 
           data={rows.map((row) => ({ name: `Маршрут ${row.number}`, value: row.value, color: routeColor(routes, row.number) }))}
         />
       </Stack>
-    </Paper>}
+    </Panel>}
   </SimpleGrid>;
 }
