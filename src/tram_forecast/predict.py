@@ -1,7 +1,6 @@
 """Submission export."""
 
 import csv
-import math
 import os
 import tempfile
 from datetime import date, timedelta
@@ -10,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from .data import ROUTES, sample
+from .data import ROUTES, request_inputs, sample
 
 
 @torch.no_grad()
@@ -73,3 +72,20 @@ def predict(model, boardings, template, output, cutoff, days, history_days):
         for h in range(24):
             predictions[5, cutoff + timedelta(days=d), h] = 0.0
     return write_submission(template, output, predictions, cutoff, cutoff + timedelta(days=days))
+
+
+def predict_autoregressive(runner, context, day):
+    """Predict through a distant day using the runner's day and context handles."""
+    runner._check_context(context)
+    if day < context.cutoff:
+        raise ValueError("Target day must be on or after the cutoff")
+    cutoff = context.cutoff
+    days = (day - cutoff).days + 1
+    request_inputs(context._events, context.route,
+                   (cutoff + timedelta(days=offset) for offset in range(days)), missing_zero=True)
+    for offset in range(days):
+        current_day = cutoff + timedelta(days=offset)
+        prediction = runner.predict_day(context, current_day)
+        if current_day < day:
+            context = runner.update_context(context, current_day, prediction)
+    return prediction

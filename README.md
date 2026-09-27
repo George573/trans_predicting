@@ -3,7 +3,9 @@
 A boarding-only PyTorch CNN that encodes a route's hourly history once and predicts
 24 boarding counts for each requested future day. Calendar features, route identity
 and forecast lead condition the predictions. The model uses 14 days of history and the
-forecast horizon is seven days, configurable up to 61.
+training forecast horizon is seven days, configurable up to 61. The Python
+inference API can predict later dates directly or advance the CNN one day at
+a time with generated counts; see [the runtime example](docs/inference_example.md).
 
 Calendar inputs include three binary Russian production-calendar flags:
 `is_holiday` (public holidays and transferred days off), `is_day_off` (including
@@ -111,7 +113,8 @@ experiment, or `--resume PATH/latest.pt` to resume at an epoch boundary.
 Each route/cutoff context is encoded once for all requested days. Training uses
 original-unit MAE, AdamW, requested-day-weighted accumulation and validation WAPE
 for early stopping. Validation freezes history at September 1. Route 5 uses a zero
-fallback. Predictions are never fed back into observed history.
+fallback. The default direct forecast does not feed predictions back into
+history. The optional autoregressive prediction function uses generated history.
 
 After selecting a validation checkpoint:
 

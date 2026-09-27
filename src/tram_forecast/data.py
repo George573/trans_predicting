@@ -3,14 +3,15 @@
 import csv
 import re
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, time as day_time
+from datetime import date, datetime, timedelta
+from datetime import time as day_time
 
 import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from .russian_calendar import day_flags
 from .events import EVENT_FEATURES, ScheduledEvents, load_events
+from .russian_calendar import day_flags
 
 HISTORY_CALENDAR_FEATURES = (
     "hour_sin", "hour_cos", "weekday_sin", "weekday_cos", "month_day_sin",
@@ -28,22 +29,23 @@ def parse_route(value):
     return int(re.fullmatch(r"(\d+)(?:\s+трамвай)?", str(value).strip()).group(1))
 
 
-def calendar(timestamps):
+def calendar(timestamps, *, missing_zero=False):
     """Cyclic date features followed by holiday, day-off and short-day flags."""
     t = list(timestamps)
     phases = np.array(
         [[x.hour / 24, x.weekday() / 7, (x.day - 1) / 31] for x in t], dtype=np.float64
     ) * 2 * np.pi
     cyclic = np.stack([f(phases[:, i]) for i in range(3) for f in (np.sin, np.cos)])
-    flags = [day_flags(x.date()) for x in t]
+    flags = [day_flags(x.date(), missing_zero=missing_zero) for x in t]
     binary = np.array([
         [f.is_holiday, f.is_day_off, f.is_short_working_day] for f in flags
     ], dtype=np.float32).T
     return np.concatenate((cyclic, binary), axis=0).astype(np.float32)
 
 
-def request_calendar(days):
-    return calendar([datetime.combine(d, day_time.min) for d in days])[2:].T
+def request_calendar(days, *, missing_zero=False):
+    return calendar([datetime.combine(d, day_time.min) for d in days],
+                    missing_zero=missing_zero)[2:].T
 
 
 @dataclass
@@ -84,30 +86,37 @@ class Boardings:
         return self.counts[self.routes.index(route), offset : offset + 24].copy()
 
 
-def history_inputs(boardings, route, cutoff, history_days):
+def history_inputs(boardings, route, cutoff, history_days, *, missing_zero=False):
     """Prepare one history without requiring any future schedule or labels."""
-    if boardings.scheduled_events is None:
+    if boardings.scheduled_events is None and not missing_zero:
         raise ValueError("Load Boardings with events_path before sampling model inputs")
     first = datetime.combine(cutoff, day_time.min) - timedelta(days=history_days)
-    history_events = boardings.scheduled_events.window(route, first.date(), history_days * 24)
+    history_events = (
+        boardings.scheduled_events.window(route, first.date(), history_days * 24,
+                                          missing_zero=missing_zero)
+        if boardings.scheduled_events is not None else np.zeros((len(EVENT_FEATURES), history_days * 24), dtype=np.float32)
+    )
     return {
         "counts": boardings.history(route, cutoff, history_days)[None, :],
         "calendar": np.concatenate((
-            calendar(first + timedelta(hours=i) for i in range(history_days * 24)),
+            calendar((first + timedelta(hours=i) for i in range(history_days * 24)),
+                     missing_zero=missing_zero),
             history_events,
         )),
     }
 
 
-def request_inputs(events, route, days):
+def request_inputs(events, route, days, *, missing_zero=False):
     """Prepare each requested day's calendar and daily event reductions."""
-    if events is None:
+    if events is None and not missing_zero:
         raise ValueError("Load Boardings with events_path before sampling model inputs")
     days = list(days)
     daily_events = np.stack([
-        events.window(route, day, 24).max(axis=1) for day in days
+        events.window(route, day, 24, missing_zero=missing_zero).max(axis=1)
+        if events is not None else np.zeros(len(EVENT_FEATURES), dtype=np.float32)
+        for day in days
     ])
-    return np.concatenate((request_calendar(days), daily_events), axis=1)
+    return np.concatenate((request_calendar(days, missing_zero=missing_zero), daily_events), axis=1)
 
 
 def sample(boardings, route, cutoff, forecast_days, history_days, *, include_target=True):

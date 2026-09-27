@@ -1,18 +1,18 @@
 import csv
 from datetime import date, timedelta
+from unittest.mock import patch
 
 import numpy as np
 import pytest
 import torch
 
 from tram_forecast.data import Boardings, ForecastDataset, collate_samples, sample
-from tram_forecast.events import EVENT_FEATURES, load_events
 from tram_forecast.evaluate import evaluate_model
+from tram_forecast.events import EVENT_FEATURES, load_events
 from tram_forecast.model import ForecastNetwork
 from tram_forecast.predict import fixed_forecast
-from tram_forecast.train import load_model, train
 from tram_forecast.runner import InferenceRunner
-from unittest.mock import patch
+from tram_forecast.train import load_model, train
 
 
 def write_events(path, days=90):
@@ -172,9 +172,9 @@ def test_runner_keeps_contexts_independent_and_rejects_foreign_context(store):
     other = InferenceRunner(ForecastNetwork(1))
     with pytest.raises(ValueError, match="different runner"):
         other.predict_day(context, cutoff)
-    for day in (cutoff - timedelta(days=1), cutoff + timedelta(days=61)):
-        with pytest.raises(ValueError, match="within 61 days"):
-            runner.predict_day(context, day)
+    with pytest.raises(ValueError, match="on or after"):
+        runner.predict_day(context, cutoff - timedelta(days=1))
+    assert np.isfinite(runner.predict_day(context, cutoff + timedelta(days=61))).all()
 
 
 def test_apply_context_does_not_require_future_events_or_labels(store, tmp_path, monkeypatch):
@@ -187,5 +187,4 @@ def test_apply_context_does_not_require_future_events_or_labels(store, tmp_path,
     monkeypatch.setattr(boardings, "target", forbidden)
     runner = InferenceRunner(ForecastNetwork(1))
     context = runner.apply_context(boardings, 7, date(2025, 9, 15))
-    with pytest.raises(ValueError, match="do not cover"):
-        runner.predict_day(context, date(2025, 9, 15))
+    assert np.isfinite(runner.predict_day(context, date(2025, 9, 15))).all()

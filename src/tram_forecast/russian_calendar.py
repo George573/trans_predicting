@@ -61,9 +61,21 @@ def _year_overrides(year: int) -> dict[date, DayFlags]:
         return parse_calendar(handle, year)
 
 
-def day_flags(day: date) -> DayFlags:
+@lru_cache(maxsize=None)
+def _inference_overrides(year: int):
+    try:
+        return _year_overrides(year)
+    except ValueError as error:
+        if not str(error).startswith("No Russian production calendar"):
+            raise
+        return None
+
+
+def day_flags(day: date, *, missing_zero=False) -> DayFlags:
     """Apply explicit overrides before the usual Saturday/Sunday rule."""
-    overrides = _year_overrides(day.year)
+    overrides = _inference_overrides(day.year) if missing_zero else _year_overrides(day.year)
+    if overrides is None:
+        return DayFlags(False, False, False)
     return overrides.get(day, DayFlags(False, day.weekday() >= 5, False))
 
 

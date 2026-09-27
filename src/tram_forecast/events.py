@@ -19,7 +19,17 @@ class ScheduledEvents:
     routes: tuple
     start: date
 
-    def window(self, route, start, hours):
+    def window(self, route, start, hours, *, missing_zero=False):
+        if missing_zero:
+            result = np.zeros((len(EVENT_FEATURES), hours), dtype=np.float32)
+            if route in self.routes:
+                offset = (start - self.start).days * 24
+                first = max(0, offset)
+                last = min(self.values.shape[2], offset + hours)
+                if first < last:
+                    values = self.values[self.routes.index(route), :, first:last]
+                    result[:, first - offset:last - offset] = np.where(np.isfinite(values), values, 0)
+            return result
         if route not in self.routes:
             raise ValueError(f"Missing scheduled events for route {route}")
         offset = (start - self.start).days * 24
