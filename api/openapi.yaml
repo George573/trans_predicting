@@ -1,0 +1,721 @@
+openapi: 3.1.0
+
+info:
+  title: Прогноз посадок на трамвайных маршрутах
+  version: 1.0.0
+  description: |
+    Контракт между сервисом инференса (Go) и дашбордом (React). Это единственный
+    источник истины по формату: обе стороны собираются против него.
+
+    Термины - в CONTEXT.md. Поведение сервиса - в docs/SPEC-service.md, интерфейс -
+    в docs/SPEC-frontend.md.
+
+    Сервис не кэширует и не прекомпьютит: прогноз считается на каждый запрос. Полная
+    сетка из 14 640 строк проходит через модель за 11 мс, поэтому любой запрос
+    диспетчера дешевле его отрисовки.
+
+servers:
+  - url: http://localhost:8080
+    description: Локальный запуск и контейнер
+
+security:
+  - basicAuth: []
+
+tags:
+  - name: forecast
+    description: Прогноз и выгрузка
+  - name: reference
+    description: Справочники и метаданные
+  - name: ops
+    description: Эксплуатация
+
+paths:
+  /api/v1/forecast:
+    post:
+      tags: [forecast]
+      summary: Прогноз посадок с применением условий
+      operationId: postForecast
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ForecastRequest' }
+            examples:
+              день:
+                summary: Один маршрут, сутки по часам, дождь на вечер
+                value:
+                  routes: [7]
+                  from: '2025-11-11'
+                  to: '2025-11-11'
+                  granularity: hour
+                  horizon: day
+                  corridor: true
+                  conditions:
+                    - id: c1
+                      type: rain
+                      value: 1.2
+                      scope:
+                        routes: [7]
+                        dates: ['2025-11-11']
+                        weekdays: null
+                        hours: [16, 22]
+              сеть:
+                summary: Все маршруты, месяц по суткам, без условий
+                value:
+                  from: '2025-12-01'
+                  to: '2025-12-31'
+                  granularity: day
+                  horizon: month
+                  corridor: true
+                  conditions: []
+      responses:
+        '200':
+          description: Прогноз посчитан
+          headers:
+            Server-Timing: { $ref: '#/components/headers/ServerTiming' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ForecastResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /api/v1/forecast/export:
+    post:
+      tags: [forecast]
+      summary: Тот же прогноз файлом
+      description: |
+        Тело запроса совпадает с `/api/v1/forecast`. Выгружается именно то, что на экране:
+        те же маршруты, период, квант и условия. Имя файла приходит в `Content-Disposition`,
+        клиент сохраняет blob.
+      operationId: postForecastExport
+      parameters:
+        - name: format
+          in: query
+          required: true
+          schema: { type: string, enum: [csv, xlsx] }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ForecastRequest' }
+      responses:
+        '200':
+          description: Файл выгрузки
+          headers:
+            Content-Disposition:
+              description: 'Например: attachment; filename="forecast_2025-11-11_r7.csv"'
+              schema: { type: string }
+          content:
+            text/csv:
+              schema: { type: string }
+              example: |
+                route;date;hour;base;prediction;lo;hi
+                7;2025-11-11;0;41;41;33;50
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+
+  /api/v1/explain:
+    post:
+      tags: [forecast]
+      summary: Разбор одной клетки
+      description: |
+        Весь путь одного значения: календарь, признаки в том виде, в каком они ушли
+        в модель, сырой выход, обрезка нуля, калибровка, каждое условие отдельной строкой,
+        итог. Вызывается по клику на столбец графика или клетку тепловой карты.
+      operationId: postExplain
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExplainRequest' }
+      responses:
+        '200':
+          description: Разбор
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExplainResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/v1/conditions:
+    get:
+      tags: [reference]
+      summary: Каталог условий с паспортами
+      description: |
+        Отдаётся при старте интерфейса: из него строятся карточки условий, пределы
+        ползунков и подсказки. Прогноз не считается.
+      operationId: getConditions
+      responses:
+        '200':
+          description: Каталог
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [conditions]
+                properties:
+                  conditions:
+                    type: array
+                    items: { $ref: '#/components/schemas/CatalogEntry' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/v1/routes:
+    get:
+      tags: [reference]
+      summary: Маршруты, названия, наличие геометрии
+      operationId: getRoutes
+      responses:
+        '200':
+          description: Маршруты
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [routes]
+                properties:
+                  routes:
+                    type: array
+                    items: { $ref: '#/components/schemas/Route' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/v1/model:
+    get:
+      tags: [reference]
+      summary: Версия бандла и метаданные обучения
+      operationId: getModel
+      responses:
+        '200':
+          description: Метаданные
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelInfo' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/v1/stats:
+    get:
+      tags: [ops]
+      summary: Счётчики запросов и ресурсы процесса
+      operationId: getStats
+      responses:
+        '200':
+          description: Счётчики
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Stats' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /healthz:
+    get:
+      tags: [ops]
+      summary: Готовность
+      description: Отвечает 200 только когда бандл загружен и прошёл проверки целостности.
+      operationId: getHealthz
+      security: []
+      responses:
+        '200':
+          description: Готов
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, bundle]
+                properties:
+                  status: { type: string, enum: [ok] }
+                  bundle: { type: string, example: '2026-09-27T09:12:00Z/8f3a1c' }
+        '503':
+          description: Бандл не загружен
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+components:
+
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+
+  headers:
+    ServerTiming:
+      description: Разбивка времени обработки, те же величины, что в `meta.timings`.
+      schema: { type: string }
+      example: parse;dur=0.1, features;dur=0.6, model;dur=1.2, corrections;dur=0.2, json;dur=0.4
+
+  schemas:
+
+    RouteNumber:
+      type: integer
+      enum: [1, 5, 7, 11, 12, 17, 25, 26, 28, 50]
+      description: 'Номер маршрута. Маршрут 5 - оценка: истории по нему нет.'
+
+    IsoDate:
+      type: string
+      format: date
+      pattern: '^\d{4}-\d{2}-\d{2}$'
+      description: Дата в пределах области определения, 2025-01-01 ... 2026-04-30.
+      example: '2025-11-11'
+
+    Granularity:
+      type: string
+      enum: [hour, day]
+      description: Квант ряда. При `hour` период не больше 31 суток.
+
+    Horizon:
+      type: string
+      enum: [day, week, month, season]
+      description: |
+        Влияет на применимость условий и на ширину коридора, но не на модель: модель одна.
+        На `month` и `season` оперативные условия не применяются - сохраняются с
+        `applied: false` и предупреждением.
+
+    ConditionType:
+      type: string
+      enum: [rain, temperature, event, delay, closure, route_change]
+      description: |
+        Оперативные (множитель в единицы процентов, живут на `day` и `week`):
+        `rain` - осадки, мм/ч;
+        `temperature` - отклонение от нормы, градусы Цельсия;
+        `event` - событие рядом, процент задаёт оператор;
+        `delay` - пост о задержке трамваев.
+        Структурные (меняют сеть, живут на всех горизонтах):
+        `closure` - отмена или перекрытие;
+        `route_change` - изменение маршрута на участке.
+
+    ConditionClass:
+      type: string
+      enum: [operational, structural]
+
+    Scope:
+      type: object
+      description: Где и когда условие действует. Все поля независимы и применяются вместе.
+      properties:
+        routes:
+          type: [array, 'null']
+          items: { $ref: '#/components/schemas/RouteNumber' }
+          maxItems: 10
+          description: '`null` - все маршруты запроса.'
+        dates:
+          type: [array, 'null']
+          items: { $ref: '#/components/schemas/IsoDate' }
+          maxItems: 366
+          description: |
+            Явный список дат. Шаблоны вида «все будни» разворачивает клиент перед
+            отправкой: сервер шаблонов не понимает. `null` - все даты периода.
+        weekdays:
+          type: [array, 'null']
+          items: { type: integer, minimum: 1, maximum: 7 }
+          maxItems: 7
+          description: Понедельник - 1. Дополнительный фильтр к датам.
+        hours:
+          type: [array, 'null']
+          minItems: 2
+          maxItems: 2
+          items: { type: integer, minimum: 0, maximum: 23 }
+          description: 'Пара [от, до] включительно. `null` - все часы.'
+          example: [16, 22]
+
+    ConditionInput:
+      type: object
+      required: [id, type, value]
+      properties:
+        id:
+          type: string
+          maxLength: 32
+          description: Задаёт клиент; возвращается в аудите и в предупреждениях.
+        type: { $ref: '#/components/schemas/ConditionType' }
+        value:
+          type: number
+          description: |
+            Значение в единицах паспорта: мм/ч для `rain`, градусы отклонения для
+            `temperature`, проценты для `event`, доля отмены для `closure`.
+            Допустимый диапазон - в каталоге.
+        scope: { $ref: '#/components/schemas/Scope' }
+
+    ForecastRequest:
+      type: object
+      required: [from, to, granularity, horizon]
+      properties:
+        routes:
+          type: array
+          items: { $ref: '#/components/schemas/RouteNumber' }
+          maxItems: 10
+          description: Пусто или отсутствует - все десять.
+        from: { $ref: '#/components/schemas/IsoDate' }
+        to: { $ref: '#/components/schemas/IsoDate' }
+        granularity: { $ref: '#/components/schemas/Granularity' }
+        horizon: { $ref: '#/components/schemas/Horizon' }
+        corridor:
+          type: boolean
+          default: true
+          description: Считать границы коридора. При `false` поля `lo` и `hi` не приходят.
+        conditions:
+          type: array
+          items: { $ref: '#/components/schemas/ConditionInput' }
+          maxItems: 16
+          default: []
+
+    Series:
+      type: object
+      required: [route, base, value, usual, base_total, total, peak_index]
+      description: Все массивы одной длины; время точки i = `start + i * step`.
+      properties:
+        route: { $ref: '#/components/schemas/RouteNumber' }
+        base:
+          type: array
+          items: { type: number }
+          description: Прогноз до применения условий.
+        value:
+          type: array
+          items: { type: number }
+          description: Прогноз после условий. При пустом сценарии совпадает с `base`.
+        usual:
+          type: array
+          items: { type: number }
+          description: |
+            Обычный уровень для этого маршрута, дня недели и часа. Нужен карте:
+            цвет линии - это `value / usual`, то есть процент от обычного уровня,
+            а не заполнение салона.
+        lo:
+          type: array
+          items: { type: number }
+          description: 'Нижняя граница коридора; приходит при `corridor: true`.'
+        hi:
+          type: array
+          items: { type: number }
+          description: |
+            Верхняя граница коридора. Превышение (`value > hi`) - это то, что
+            показывается кольцами на карте и строками в тревогах.
+        base_total: { type: number }
+        total: { type: number }
+        peak_index:
+          type: integer
+          description: Индекс максимума в `value`.
+
+    Passport:
+      type: object
+      description: |
+        Паспорт условия: он же показывается при наведении. Смысл - показать, что
+        величина измерена на истории с интервалом, а не взята из головы.
+      required: [unit, source, effect_pct, ci_pct, horizons, class]
+      properties:
+        unit: { type: string, example: мм/ч }
+        step: { type: number, example: 0.2 }
+        source: { type: string, example: Open-Meteo ERA5 }
+        source_url: { type: string, format: uri }
+        effect_pct:
+          type: number
+          description: Точечный эффект в процентах; для выбранного маршрута, если он один.
+          example: -5.4
+        ci_pct:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items: { type: number }
+          example: [-10.0, 0.0]
+        sample: { type: integer, example: 1953 }
+        horizons:
+          type: array
+          items: { $ref: '#/components/schemas/Horizon' }
+        class: { $ref: '#/components/schemas/ConditionClass' }
+
+    AppliedCondition:
+      type: object
+      required: [id, type, applied, factor, contribution_pct, points, passport]
+      properties:
+        id: { type: string }
+        type: { $ref: '#/components/schemas/ConditionType' }
+        applied:
+          type: boolean
+          description: |
+            `false` означает, что условие сохранено, но не применено - например, оперативное
+            условие на горизонте месяц. Прогноз при этом не изменён, а в `warnings` лежит
+            запись с тем же `condition_id`. Клиент показывает карточку серой, а не удаляет.
+        factor:
+          type: number
+          description: Множитель условия. Композиция условий - произведение, порядок не важен.
+          example: 0.936
+        contribution_pct:
+          type: number
+          description: Вклад в изменение суммы по всему выбору, проценты.
+          example: -1.4
+        points:
+          type: integer
+          description: Сколько точек ряда попало в область условия.
+        profile:
+          type: [array, 'null']
+          items: { type: number }
+          description: |
+            Почасовой профиль эффекта, 24 значения. Заполняется только когда запрошен
+            один маршрут и одни сутки: на месяце по десяти маршрутам это в разы больше
+            данных, чем сам прогноз. В остальных случаях `null`.
+        passport: { $ref: '#/components/schemas/Passport' }
+
+    Warning:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum:
+            - condition_not_applicable_on_horizon
+            - condition_scope_empty
+            - correction_clamped
+            - route_without_history
+          description: |
+            `condition_not_applicable_on_horizon` - оперативное условие на месяце или сезоне;
+            `condition_scope_empty` - область условия не пересеклась с периодом запроса;
+            `correction_clamped` - произведение условий вышло за коридор корректировки
+            и было ограничено, значение указано в сообщении;
+            `route_without_history` - в выборке есть маршрут 5, его значения - оценка.
+        condition_id: { type: [string, 'null'] }
+        message:
+          type: string
+          description: Русский текст, пригодный к показу как есть.
+
+    Timings:
+      type: object
+      description: Миллисекунды.
+      properties:
+        parse: { type: number }
+        features: { type: number }
+        model: { type: number }
+        corrections: { type: number }
+        json: { type: number }
+
+    Meta:
+      type: object
+      required: [rows, model, timings]
+      properties:
+        rows:
+          type: integer
+          description: Сколько строк ушло в модель.
+        model: { type: string, example: catboost_cyclic_service }
+        timings: { $ref: '#/components/schemas/Timings' }
+
+    ForecastResponse:
+      type: object
+      required: [start, step, bundle, series, conditions, warnings, meta]
+      properties:
+        start:
+          type: string
+          example: '2025-11-10T00:00'
+        step:
+          type: string
+          enum: ['1h', '1d', '1mo']
+        bundle:
+          type: string
+          example: '2026-09-27T09:12:00Z/8f3a1c'
+        series:
+          type: array
+          items: { $ref: '#/components/schemas/Series' }
+        conditions:
+          type: array
+          items: { $ref: '#/components/schemas/AppliedCondition' }
+        warnings:
+          type: array
+          items: { $ref: '#/components/schemas/Warning' }
+        meta: { $ref: '#/components/schemas/Meta' }
+
+    ExplainRequest:
+      type: object
+      required: [route, date, hour]
+      properties:
+        route: { $ref: '#/components/schemas/RouteNumber' }
+        date: { $ref: '#/components/schemas/IsoDate' }
+        hour: { type: integer, minimum: 0, maximum: 23 }
+        conditions:
+          type: array
+          items: { $ref: '#/components/schemas/ConditionInput' }
+          maxItems: 16
+          default: []
+
+    ExplainStep:
+      type: object
+      required: [step, value]
+      properties:
+        step:
+          type: string
+          description: 'Например: сырой выход модели, обрезка нуля, калибровка, условие c1.'
+        detail: { type: string }
+        factor: { type: [number, 'null'] }
+        value: { type: number }
+
+    ExplainResponse:
+      type: object
+      required: [route, date, hour, calendar, features, steps, value]
+      properties:
+        route: { $ref: '#/components/schemas/RouteNumber' }
+        date: { $ref: '#/components/schemas/IsoDate' }
+        hour: { type: integer }
+        calendar:
+          type: object
+          description: Флаги производственного календаря на эту дату.
+          additionalProperties: true
+        features:
+          type: array
+          description: Признаки в том виде, в каком они ушли в модель, в порядке подачи.
+          items:
+            type: object
+            required: [name, value]
+            properties:
+              name: { type: string }
+              value: {}
+              kind: { type: string, enum: [float, categorical] }
+              hash: { type: [integer, 'null'] }
+        steps:
+          type: array
+          items: { $ref: '#/components/schemas/ExplainStep' }
+        value: { type: number }
+
+    CatalogEntry:
+      type: object
+      required: [type, class, passport, range]
+      properties:
+        type: { $ref: '#/components/schemas/ConditionType' }
+        class: { $ref: '#/components/schemas/ConditionClass' }
+        title: { type: string, example: Дождь }
+        passport: { $ref: '#/components/schemas/Passport' }
+        by_route:
+          type: object
+          description: Эффект по маршрутам; при выборе нескольких маршрутов берётся общий.
+          additionalProperties: { $ref: '#/components/schemas/Passport' }
+        range:
+          type: object
+          description: Пределы ползунка в единицах паспорта.
+          required: [min, max]
+          properties:
+            min: { type: number }
+            max: { type: number }
+            step: { type: number }
+        auto:
+          type: boolean
+          default: false
+          description: |
+            Применяется ли условие автоматически из данных. Сейчас `false` у всех шести,
+            и это измеренное решение: автоматическая поправка на дождь двигает почасовой
+            WAPE на +0.013 пункта [-0.044; +0.065], то есть ни на что, а фиксированные
+            температурные коэффициенты делают хуже. Сами эффекты при этом значимы на истории.
+
+    Route:
+      type: object
+      required: [route, name, has_geometry, has_history]
+      properties:
+        route: { $ref: '#/components/schemas/RouteNumber' }
+        name: { type: string, example: Бульвар Рокоссовского - Белорусский вокзал }
+        has_geometry:
+          type: boolean
+          description: |
+            Есть ли линия в `web/geo/routes.geojson`. Маршруты без геометрии живут в
+            списках и графиках, но не на карте.
+        has_history:
+          type: boolean
+          description: '`false` у маршрута 5: его значения получены городским профилем.'
+        geometry_source:
+          type: string
+          enum: [spravochnik, osm, none]
+
+    ModelInfo:
+      type: object
+      required: [bundle, model, features, train_period, horizon]
+      properties:
+        bundle: { type: string }
+        model: { type: string }
+        mode:
+          type: string
+          enum: [service, metric]
+          description: |
+            `service` - погоды в модели нет, она приходит условием; так работает дашборд.
+            `metric` - погода признаками; этим бандлом собран CSV для платформы. Одновременно
+            режимы не применяются: эффект считался бы дважды.
+        features:
+          type: array
+          items: { type: string }
+        cat_features:
+          type: array
+          items: { type: string }
+        train_period:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items: { $ref: '#/components/schemas/IsoDate' }
+        horizon:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items: { $ref: '#/components/schemas/IsoDate' }
+          description: Область определения по датам, 2025-01-01 ... 2026-04-30.
+        wape_score: { type: number, example: 0.8882 }
+
+    Stats:
+      type: object
+      properties:
+        requests: { type: integer }
+        rows: { type: integer }
+        rps_1m: { type: number }
+        p50_ms: { type: number }
+        p95_ms: { type: number }
+        cpu_pct: { type: number }
+        rss_mb: { type: number }
+        uptime_s: { type: number }
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum:
+                - bad_request
+                - unauthorized
+                - period_too_long
+                - too_many_rows
+                - too_many_conditions
+                - out_of_domain
+                - internal
+            message:
+              type: string
+              description: Русский текст, пригодный к показу как есть.
+            field:
+              type: string
+              description: Поле запроса, вызвавшее ошибку.
+
+  responses:
+    BadRequest:
+      description: Неверный запрос
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error:
+              code: out_of_domain
+              message: Дата 2026-07-01 вне области определения модели, доступно до 2026-04-30
+              field: to
+    Unauthorized:
+      description: Нет авторизации
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    TooLarge:
+      description: Запрос превышает пределы
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error:
+              code: period_too_long
+              message: По часам доступен период не больше 31 суток, запрошено 61
+              field: granularity
+    ServerError:
+      description: Внутренняя ошибка
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
