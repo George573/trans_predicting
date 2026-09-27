@@ -1,6 +1,7 @@
 package forecast_test
 
 import (
+	"errors"
 	"math"
 	"os"
 	"slices"
@@ -159,5 +160,30 @@ func TestCorridorFloorsByHorizon(t *testing.T) {
 				t.Fatalf("day route %d point %d: %v not in [%v, %v]", g.Routes[i], j, b, lo[i][j], hi[i][j])
 			}
 		}
+	}
+}
+
+type shortModel struct {
+	forecast.Model
+	last time.Time
+}
+
+func (m shortModel) Predict(cells []features.Cell, usual bool) ([]float64, error) {
+	for _, c := range cells {
+		if c.Date.After(m.last) {
+			return nil, errors.New("beyond the model")
+		}
+	}
+	return m.Model.Predict(cells, usual)
+}
+
+func TestCheckHorizonPredictsBothEdges(t *testing.T) {
+	if err := engine.CheckHorizon(); err != nil {
+		t.Fatal(err)
+	}
+	e := *engine
+	e.Model = shortModel{engine.Model, engine.Bundle.To.AddDate(0, 0, -1)}
+	if err := e.CheckHorizon(); err == nil {
+		t.Fatal("horizon end beyond the model accepted")
 	}
 }

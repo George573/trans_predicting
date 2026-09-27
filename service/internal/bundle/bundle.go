@@ -160,6 +160,13 @@ func (b *Bundle) check() error {
 	if s := b.Postprocess.Route5Share; s <= 0 || s >= 1 {
 		return fmt.Errorf("postprocess.json: доля маршрута 5 %g вне (0, 1)", s)
 	}
+	for day, row := range b.Postprocess.NewYearTable {
+		for h, f := range row {
+			if f <= 0 {
+				return fmt.Errorf("postprocess.json: новогодний коэффициент %g на %s %d ч должен быть больше нуля", f, day, h)
+			}
+		}
+	}
 	return nil
 }
 
@@ -185,6 +192,18 @@ func (c *Corridor) check() error {
 	}
 	if _, ok := c.Daily["*"]; !ok {
 		return errors.New("нет daily[\"*\"]")
+	}
+	for route, q := range c.Daily {
+		if q[0] > 1 || q[1] < 1 {
+			return fmt.Errorf("daily[%q]: пара %g-%g не содержит 1", route, q[0], q[1])
+		}
+	}
+	for route, bands := range c.Hourly {
+		for name, q := range bands {
+			if q[0] > 1 || q[1] < 1 {
+				return fmt.Errorf("hourly[%q][%s]: пара %g-%g не содержит 1", route, name, q[0], q[1])
+			}
+		}
 	}
 	for _, h := range horizons {
 		if c.Widen[h] <= 0 {

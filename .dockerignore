@@ -1,0 +1,7 @@
+*
+!service
+!artifacts/bundle
+!input/calendar/*.xml
+!web/geo/routes.geojson
+service/lib
+service/bin

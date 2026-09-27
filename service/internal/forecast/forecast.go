@@ -291,3 +291,13 @@ func (e *Engine) Verify() (Check, error) {
 	}
 	return c, nil
 }
+
+func (e *Engine) CheckHorizon() error {
+	for _, d := range []time.Time{e.Bundle.From, e.Bundle.To} {
+		day, _ := e.Cal.Day(d)
+		if _, err := e.Model.Predict([]features.Cell{{Route: modeled(features.Routes)[0], Day: day}}, false); err != nil {
+			return fmt.Errorf("прогноз на границу горизонта %s не строится: %w", d.Format(time.DateOnly), err)
+		}
+	}
+	return nil
+}

@@ -271,7 +271,7 @@ func (c *Catalog) Check(in []Input) error {
 		ids[x.ID] = true
 		e := c.Entry(x.Type)
 		if e == nil {
-			return &FieldError{field("type"), fmt.Sprintf("Неизвестный тип условия %q", x.Type)}
+			return &FieldError{field("type"), fmt.Sprintf("Неизвестный тип условия %.32q", x.Type)}
 		}
 		if x.Value < e.Range.Min || x.Value > e.Range.Max {
 			return &FieldError{field("value"), fmt.Sprintf("Значение условия «%s» должно быть от %g до %g, передано %g", e.Title, e.Range.Min, e.Range.Max, x.Value)}

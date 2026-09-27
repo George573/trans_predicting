@@ -257,3 +257,14 @@ func TestValidateRejectsBadCatalog(t *testing.T) {
 		t.Fatal("automatic condition with a zero-crossing interval accepted")
 	}
 }
+
+func TestUnknownTypeMessageIsBounded(t *testing.T) {
+	var fe *FieldError
+	err := catalog().Check([]Input{{ID: "c1", Type: strings.Repeat("x", 1000)}})
+	if !errors.As(err, &fe) || fe.Field != "conditions[0].type" {
+		t.Fatalf("got %v", err)
+	}
+	if strings.Count(fe.Message, "x") != 32 {
+		t.Fatalf("message echoes %d characters of the type: %s", strings.Count(fe.Message, "x"), fe.Message)
+	}
+}
