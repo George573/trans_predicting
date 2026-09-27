@@ -1,19 +1,16 @@
 sequenceDiagram
     autonumber
-    actor U as Диспетчер
-    participant B as UI в браузере
+    actor U as Клиент API
     participant S as Go-сервис
-    participant M as Голова CNN в памяти
-    U->>B: маршрут, период, детализация, коэффициенты
-    B->>S: GET /api/v1/forecast?route=7,11&from=...&granularity=hour
-    S->>S: basic auth, разбор и проверка параметров
-    loop каждая пара маршрут x день
-        S->>M: календарь дня, lead
-        M-->>S: 24 значения посадок
-    end
-    S->>S: умножение на k_weather x k_event x k_season,<br/>свёртка до часов или суток
-    S-->>B: JSON: серии, итоги, пики, meta.timings<br/>+ заголовок Server-Timing
-    B-->>U: график или тепловая карта,<br/>разбивка времени запроса
-    U->>B: клик по точке
-    B->>S: GET /api/v1/explain?route=7&date=...&hour=8
-    S-->>B: путь точки: история, вход головы,<br/>выход модели, k, итог
+    participant M as Модель в памяти<br/>CatBoost или CNN
+    U->>S: POST /api/v1/forecast<br/>model, routes, from, to, granularity, horizon, conditions
+    S->>S: basic auth, разбор и проверка тела,<br/>область дат модели
+    S->>M: сетка маршрут x дата x час
+    M-->>S: сырой прогноз
+    S->>S: калибровка, маршрут 5, новогодний блок
+    S->>M: необычные дни сетки как обычные
+    M-->>S: обычный уровень
+    S->>S: коридор по горизонту, условия по кривым паспортов,<br/>аудит, свёртка до часов или суток
+    S-->>U: JSON: base, value, usual, lo, hi, аудит, предупреждения,<br/>meta.timings + заголовок Server-Timing
+    U->>S: POST /api/v1/explain: route, date, hour
+    S-->>U: шаги: признаки, сырой выход, калибровка,<br/>каждое условие, коридор корректировки

@@ -2,28 +2,28 @@
 !pragma layout smetana
 skinparam shadowing false
 skinparam defaultFontName Helvetica
+node "Репозиторий" as repo {
+  artifact "Бандлы\nartifacts/bundle" as bnd
+  artifact "Календари 2024-2026\nи геометрия линий" as ref
+}
 node "Сборка образа, Docker" {
-  node "Стадия 1: Python + PyTorch" as s1 {
-    artifact "Чекпойнт CNN" as ck
-    artifact "Посадки до даты отсечки" as lab
-    component "Экспорт головы" as ex
-  }
-  node "Стадия 2: Go toolchain" as s2 {
-    component "Статический бинарник сервера" as bin
+  node "Стадия 1: golang:1.24-bookworm" as s1 {
+    component "libcatboostmodel" as lib
+    component "Бинарник сервера (cgo)" as bin
   }
 }
-node "Итоговый образ: scratch, UID 65534" as run {
-  component "Go-сервер + встроенный UI" as srv
-  artifact "Голова CNN + эталон" as hj
+node "Прод-хост" as host {
+  component "nginx\nhttps://mttech.k1rles.ru" as nginx
+  component "Прежний стенд\nкопия для отката" as old
+  node "Контейнер: debian:bookworm-slim, nobody" as run {
+    component "Go-сервер\nтолько API" as srv
+  }
 }
-node "Сеть compose" {
-  component "Нагрузочный клиент" as load
-}
-actor "Браузер" as br
-ck --> ex
-lab --> ex
-ex --> hj
+actor "Клиент API" as cl
+lib --> srv
 bin --> srv
-br --> srv : HTTP :8090\nbasic auth
-load --> srv : HTTP
+bnd --> srv
+ref --> srv
+cl --> nginx : HTTPS
+nginx --> srv : 127.0.0.1:8090
 @enduml

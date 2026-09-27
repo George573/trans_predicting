@@ -1,25 +1,25 @@
 @startuml
 skinparam shadowing false
 skinparam defaultFontName Helvetica
-participant "Экспорт\n(PyTorch)" as py
-participant "Файл головы" as f
+participant "Экспорт\n(Python)" as py
+participant "Бандлы" as f
 participant "Go-сервер" as go
 participant "Клиент" as cl
-== Сборка образа ==
-py -> py : энкодер по истории 14 суток\nкаждого маршрута
-py -> py : история и эмбеддинг x их часть\nвесов первого слоя = константа маршрута
-py -> f : константы маршрутов, веса зависящей от даты части,\nостальные слои, эталонные дни целиком
+== Экспорт бандлов ==
+py -> py : CatBoost: модель, калибровка,\nпостобработка, коридор
+py -> py : CNN: энкодер по истории 14 суток,\nhidden_base на маршрут,\nвходы дня таблицей маршрут x день
+py -> f : бандлы + эталон Python\nна 14 640 строк
 == Старт сервера ==
-go -> f : загрузить
-go -> go : посчитать весь горизонт
-go -> go : сравнить с эталонными днями
-alt расхождение > 1e-4
+go -> f : загрузить и проверить состав
+go -> go : пересчитать весь эталон\nобеими моделями
+go -> go : сверить сырой выход с допуском,\nитог до одной посадки;\nпрогноз на границы области дат
+alt расхождение
   go -> go : отказ запуска
 else совпадает
   go -> cl : /healthz = ok, приём запросов
 end
 == Запрос ==
-cl -> go : forecast
-go -> go : вклад календаря и lead, GELU,\nостальные слои, softplus
+cl -> go : POST /api/v1/forecast
+go -> go : CatBoost: деревья через libcatboostmodel\nCNN: первый слой по входам дня и lead,\nGELU, второй слой, softplus
 go --> cl : прогноз
 @enduml

@@ -3,36 +3,47 @@
 skinparam componentStyle rectangle
 skinparam shadowing false
 skinparam defaultFontName Helvetica
-actor "Диспетчер" as user
+actor "Клиент API" as user
 package "Обучение, Python" {
   [Подготовка почасовой сетки] as prep
   [Обучение CNN\nPyTorch] as train
-  [Экспорт головы\nPyTorch -> JSON] as export
   [Ансамбль\nCatBoost + MLP] as ens
+  [export_cnn_bundle.py] as excnn
+  [export_bundle.py] as excb
 }
 database "Валидации\nянварь-октябрь" as data
 database "Календарь XML\nи расписание событий" as cal
 artifact "Чекпойнт CNN" as ckpt
-artifact "Голова CNN + эталонные дни" as head
-artifact "Модель CatBoost" as cbm
+artifact "Бандл CNN\nhead.json + эталон" as bcnn
+artifact "Бандл CatBoost\nmodel.cbm + эталон" as bcb
+artifact "Каталог условий" as cond
 package "Контейнер сервиса, Go" {
-  [HTTP API\n/forecast /explain /export\n/model /stats /healthz] as api
-  [Голова CNN\nна каждый запрос] as cnnhead
-  [Встроенный UI] as ui
+  [internal/bundle\nчтение и golden-сверка] as bundle
+  [internal/cnn\nголова CNN] as cnn
+  [internal/catboost\nlibcatboostmodel] as cb
+  [internal/forecast\nпостобработка, коридор,\nобычный уровень] as fc
+  [internal/conditions\nусловия и аудит] as cn
+  [internal/api\n/forecast /export /explain\n/conditions /routes /model\n/stats /healthz /geo] as api
 }
-[Нагрузочный клиент] as load
+[cmd/load\nнагрузочный клиент] as load
 data --> prep
 cal --> prep
 prep --> train
 prep --> ens
 train --> ckpt
-ckpt --> export
-export --> head
-head --> cnnhead
-ens --> cbm
-cbm ..> api : резервный\nстенд
-cnnhead --> api
-api --> ui
-user --> ui
+ckpt --> excnn
+excnn --> bcnn
+ens --> excb
+excb --> bcb
+bcnn --> bundle
+bcb --> bundle
+cond --> cn
+bundle --> cnn
+bundle --> cb
+cnn --> fc
+cb --> fc
+fc --> cn
+cn --> api
+user --> api
 load --> api
 @enduml

@@ -4,30 +4,32 @@ skinparam componentStyle rectangle
 skinparam shadowing false
 skinparam defaultFontName Helvetica
 actor "Диспетчер" as user
-package "Бандл версии, загружается при старте" {
-  artifact "Модель" as m
+package "Бандлы, загружаются при старте" {
+  artifact "Модели\nCatBoost и CNN" as m
   artifact "Калибровка\nмаршрут x день недели" as cal
   artifact "Коридор\nэмпирические квантили" as cor
   artifact "Постобработка\nмаршрут 5, Новый год" as pp
-  artifact "Каталог условий\nс паспортами" as cond
+  artifact "Каталог условий\nс паспортами и кривыми" as cond
   artifact "Геометрия линий\nGeoJSON" as geo
 }
-package "Сервис, Go" {
-  [Признаки и модель] as model
+package "Сервис, Go - реализован" {
+  [Признаки и модель\nпо полю model] as model
   [Калибровка и постобработка] as post
+  [Коридор и обычный уровень] as corr
   [Слой условий\nпроизведение, аудит] as layer
-  [API по контракту OpenAPI 3.1\nPOST forecast, export CSV/XLSX,\nexplain, conditions, routes] as api
+  [API по контракту OpenAPI 3.1\nPOST forecast, export CSV/XLSX,\nexplain, conditions, routes, geo] as api
 }
-[Дашборд\nReact + TypeScript,\nкарта Leaflet] as ui
+[Дашборд\nReact + TypeScript,\nкарта Leaflet\n(не сделан)] as ui #EEEEEE
 m --> model
 cal --> post
 pp --> post
+cor --> corr
 cond --> layer
-cor --> layer
 model --> post
-post --> layer
+post --> corr
+corr --> layer
 layer --> api
-api --> ui
-geo --> ui
-user --> ui
+geo --> api
+api ..> ui
+user ..> ui
 @enduml

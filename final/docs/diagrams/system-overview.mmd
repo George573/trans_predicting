@@ -15,22 +15,22 @@ flowchart LR
     end
     subgraph ART[Артефакты]
         CK[Чекпойнт CNN]
-        HJ[Голова CNN<br/>для Go + эталон]
-        CBM[Модель CatBoost]
+        BC[Бандл CNN<br/>голова, контекст, эталон]
+        BB[Бандл CatBoost<br/>модель, калибровка, эталон]
+        CND[Каталог условий]
         CSV[Файл прогноза<br/>14 640 строк]
     end
     subgraph SVC[Сервис, Go]
-        API[HTTP API<br/>basic auth]
-        UI[Встроенный UI]
+        API[HTTP API<br/>CatBoost и CNN, условия,<br/>коридор, CSV и XLSX]
     end
     V --> G
     CAL --> G
     EV --> G
     WX --> ML
-    G --> CNN --> CK --> HJ --> API
+    G --> CNN --> CK --> BC --> API
     G --> ML --> CSV
-    ML --> CBM -.резерв.-> API
-    OSM -.карта.-> UI
-    API --> UI
-    D([Диспетчер]) --> UI
+    ML --> BB --> API
+    CND --> API
+    OSM -.GeoJSON.-> API
+    API -.будущий интерфейс.-> D([Диспетчер])
     J([Платформа хакатона]) --- CSV
