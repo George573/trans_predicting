@@ -1,0 +1,103 @@
+{
+  "clamp": [0.0, 1.5],
+  "conditions": [
+    {
+      "type": "rain",
+      "class": "operational",
+      "title": "Дождь",
+      "passport": {
+        "unit": "мм/ч", "step": 0.1, "source": "Open-Meteo ERA5, посадки против нормы в часы 6-22, январь-октябрь 2025",
+        "source_url": "https://open-meteo.com/", "effect_pct": -6.4, "ci_pct": [-10.3, -2.9], "sample": 1953,
+        "horizons": ["day", "week"], "class": "operational"
+      },
+      "by_route": {
+        "1": {"effect_pct": -7.0, "ci_pct": [-11.0, -3.0]},
+        "7": {"effect_pct": -5.4, "ci_pct": [-10.0, 0.0]},
+        "11": {"effect_pct": -6.5, "ci_pct": [-11.0, -3.0]},
+        "12": {"effect_pct": -6.4, "ci_pct": [-10.0, -3.0]},
+        "17": {"effect_pct": -9.6, "ci_pct": [-15.0, -5.0]},
+        "25": {"effect_pct": -10.0, "ci_pct": [-16.0, -3.0]},
+        "26": {"effect_pct": -6.0, "ci_pct": [-10.0, -2.0]},
+        "28": {"effect_pct": -7.2, "ci_pct": [-13.0, -3.0]},
+        "50": {"effect_pct": -3.1, "ci_pct": [-8.0, 1.0]}
+      },
+      "range": {"min": 0, "max": 5, "step": 0.1},
+      "auto": false,
+      "curve": [[0, 0], [0.05, 0], [0.05, -2.2], [0.3, -2.2], [0.3, -6.4], [1, -6.4], [1, -7.6], [3, -7.6], [3, -9.7]]
+    },
+    {
+      "type": "temperature",
+      "class": "operational",
+      "title": "Температура",
+      "passport": {
+        "unit": "°C от нормы", "step": 1, "source": "Open-Meteo ERA5, совместная регрессия апрель-октябрь 2025, эффект на +10 °C",
+        "source_url": "https://open-meteo.com/", "effect_pct": 3.8, "ci_pct": [0.6, 7.2], "sample": 32072,
+        "horizons": ["day", "week"], "class": "operational"
+      },
+      "range": {"min": -10, "max": 10, "step": 1},
+      "auto": false,
+      "curve": [[-10, -3.8], [10, 3.8]]
+    },
+    {
+      "type": "event",
+      "class": "operational",
+      "title": "Событие рядом",
+      "passport": {
+        "unit": "%", "step": 1, "source": "оператор: эффект не измерен, задаётся вручную",
+        "effect_pct": 0, "ci_pct": [0, 0], "horizons": ["day", "week"], "class": "operational"
+      },
+      "range": {"min": -50, "max": 50, "step": 1},
+      "auto": false,
+      "curve": [[-50, -50], [50, 50]]
+    },
+    {
+      "type": "delay",
+      "class": "operational",
+      "title": "Задержка трамваев",
+      "passport": {
+        "unit": "пост о задержке", "step": 1, "source": "посты Дептранса «задерживаются трамваи», 0-2 ч после поста, совместная регрессия",
+        "source_url": "https://t.me/s/DtOperativno", "effect_pct": -31.7, "ci_pct": [-41.2, -23.6], "sample": 121,
+        "horizons": ["day"], "class": "operational"
+      },
+      "by_route": {
+        "7": {"effect_pct": -24.3, "ci_pct": [-35.0, -11.0], "sample": 8},
+        "11": {"effect_pct": -19.0, "ci_pct": [-30.0, -9.0], "sample": 9},
+        "12": {"effect_pct": -15.7, "ci_pct": [-20.0, -12.0], "sample": 5},
+        "17": {"effect_pct": -25.4, "ci_pct": [-44.0, -9.0], "sample": 9},
+        "25": {"effect_pct": -22.8, "ci_pct": [-36.0, -8.0], "sample": 4},
+        "26": {"effect_pct": -16.2, "ci_pct": [-48.0, -5.0], "sample": 4},
+        "28": {"effect_pct": -39.1, "ci_pct": [-65.0, -21.0], "sample": 2},
+        "50": {"effect_pct": -30.9, "ci_pct": [-52.0, -15.0], "sample": 8}
+      },
+      "range": {"min": 0, "max": 1, "step": 1},
+      "auto": false,
+      "curve": [[0, 0], [1, -31.7]]
+    },
+    {
+      "type": "closure",
+      "class": "structural",
+      "title": "Отмена или перекрытие",
+      "passport": {
+        "unit": "доля отменённых рейсов", "step": 0.05, "source": "посты Дептранса об отмене маршрута: -96.7% за 9 дней; полное перекрытие - 0 посадок",
+        "source_url": "https://t.me/s/DtOperativno", "effect_pct": -96.7, "ci_pct": [-100.0, -96.7], "sample": 9,
+        "horizons": ["day", "week", "month", "season"], "class": "structural"
+      },
+      "range": {"min": 0, "max": 1, "step": 0.05},
+      "auto": false,
+      "curve": [[0, 0], [1, -100]]
+    },
+    {
+      "type": "route_change",
+      "class": "structural",
+      "title": "Изменение маршрута",
+      "passport": {
+        "unit": "1 - укорачивание, 2 - объезд", "step": 1, "source": "посты Дептранса: укорачивание -15.2% (78 дней), объезд -17.0% (42 дня)",
+        "source_url": "https://t.me/s/DtOperativno", "effect_pct": -15.2, "ci_pct": [-17.0, -15.2], "sample": 120,
+        "horizons": ["day", "week", "month", "season"], "class": "structural"
+      },
+      "range": {"min": 0, "max": 2, "step": 1},
+      "auto": false,
+      "curve": [[0, 0], [1, -15.2], [2, -17.0]]
+    }
+  ]
+}
