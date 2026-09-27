@@ -276,10 +276,52 @@ def perf_catboost():
     save(fig, "perf_catboost")
 
 
+def perf_load():
+    series = [
+        ("прод, 2 vCPU", RED, [100, 200, 300, 400], [15.29, 15.22, 28.76, 51.46],
+         [55.01, 55.12, 65.32, 114.43], [37, 65, 92, 121]),
+        ("M4, 2 ядра", GOLD, [100, 200, 300, 400], [11.46, 10.43, 10.73, 11.31],
+         [49.32, 39.05, 36.05, 32.50], [30.5, 45.2, 54.9, 67.8]),
+        ("M4, 10 ядер", BLUE, [100, 200, 300, 400, 500, 1000],
+         [11.39, 7.99, 7.05, 6.99, 6.93, 6.75], [45.98, 38.15, 33.69, 30.41, 29.68, 30.05],
+         [28.2, 41.1, 54.8, 66.8, 85.3, 164.5]),
+    ]
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4), constrained_layout=True)
+    for name, color, rps, p95, p99, cpu in series:
+        axes[0].plot(rps, p95, "o-", color=color, label=f"{name}, p95")
+        axes[0].plot(rps, p99, "o--", color=color, alpha=0.6, label=f"{name}, p99")
+        axes[1].plot(rps, cpu, "o-", color=color, label=name)
+    axes[1].axhspan(120, 160, color=GREEN, alpha=0.15,
+                    label="60-80% от 2 ядер (120-160% ядра)")
+    style(axes[0], "заданный RPS, открытый цикл", "задержка, мс", "Задержка p95 и p99 (пунктир)")
+    style(axes[1], "заданный RPS, открытый цикл", "CPU сервера, % одного ядра",
+          "Утилизация CPU и зона кейса")
+    axes[0].legend(frameon=False, fontsize=7, ncol=2)
+    axes[1].legend(frameon=False, fontsize=8)
+    save(fig, "perf_load")
+
+
+def perf_heavy():
+    rows = [("30 суток по часам\n2025-11", 12.6, 51.4), ("61 сутки по суткам\n2025-11...12", 23.2, 100.4),
+            ("120 суток по суткам\n2026-01...04", 47.3, 197.4)]
+    fig, ax = plt.subplots(figsize=(7, 3.8), constrained_layout=True)
+    x = np.arange(len(rows))
+    for off, idx, name, color in [(-0.18, 1, "CatBoost", GREEN), (0.18, 2, "CNN", BLUE)]:
+        ax.bar(x + off, [r[idx] for r in rows], 0.34, color=color, label=name)
+        for xi, r in zip(x, rows):
+            ax.text(xi + off, r[idx] + 3, f"{r[idx]:.1f}", ha="center", fontsize=8)
+    ax.set_xticks(x, [r[0] for r in rows], fontsize=8)
+    ax.set_ylim(0, 225)
+    style(ax, ylabel="время модели, мс",
+          title="Вся сеть одним запросом, прод 2 vCPU, медиана Server-Timing")
+    ax.legend(frameon=False, fontsize=8)
+    save(fig, "perf_heavy")
+
+
 if __name__ == "__main__":
     IMG.mkdir(parents=True, exist_ok=True)
     for fn in (score_progress, cnn_training, backtest_vs_target, ml_steps, geo_levels,
                geo_configs, geo_warmup, calendar_effects, weather_traffic_effects,
-               rain_by_route, perf_rps, perf_catboost):
+               rain_by_route, perf_rps, perf_catboost, perf_load, perf_heavy):
         fn()
     print("\n".join(sorted(p.name for p in IMG.glob("*.svg"))))
