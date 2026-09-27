@@ -9,8 +9,8 @@
      затронутых ячейках заменяется профилем режима - медианой наблюдённых посадок того же
      маршрута, дня недели и часа с начала изменения до отсечки.
 
-Выход: artifacts/experiments/dated_rules_shap.json и графики final/docs/img/shap_*.svg,
-final/docs/img/dated_rules.svg. Запуск из корня: PYTHONPATH=. python3 experiments/dated_rules_shap.py
+Выход: artifacts/experiments/dated_rules_shap.json и графики docs/img/shap_*.svg,
+docs/img/dated_rules.svg. Запуск из корня: PYTHONPATH=. python3 experiments/dated_rules_shap.py
 """
 
 import json
@@ -32,7 +32,7 @@ from final_ensemble import ROUTES
 from metrics import wape
 
 OUT = Path("artifacts/experiments/dated_rules_shap.json")
-IMG = Path("final/docs/img")
+IMG = Path("docs/img")
 BLUE, GOLD, GREEN, RED, GREY = "#2b6cb0", "#b7791f", "#276749", "#c53030", "#718096"
 plt.rcParams.update({"font.size": 10, "svg.fonttype": "path", "axes.unicode_minus": False})
 

@@ -1590,7 +1590,7 @@ L -3.5 0
       </g>
      </g>
      <g id="text_11">
-      <!-- -0.025 -->
+      <!-- −0.025 -->
       <g transform="translate(17.00024 270.917101) scale(0.1 -0.1)">
        <defs>
         <path id="DejaVuSans-c9c" d="M 678 2272 
@@ -3062,7 +3062,7 @@ L 824.99976 267.118273
       </g>
      </g>
      <g id="text_29">
-      <!-- -0.025 -->
+      <!-- −0.025 -->
       <g transform="translate(432.14 270.917101) scale(0.1 -0.1)">
        <use xlink:href="#DejaVuSans-c9c"/>
        <use xlink:href="#DejaVuSans-13" transform="translate(83.796875 0)"/>

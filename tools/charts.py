@@ -1,6 +1,6 @@
-"""Графики для документов final/docs по числам, зафиксированным в отчётах.
+"""Графики для документов docs по числам, зафиксированным в отчётах.
 
-Выход: final/docs/img/*.svg. Запуск из корня репозитория: python3 final/tools/charts.py
+Выход: docs/img/*.svg. Запуск из корня репозитория: python3 tools/charts.py
 """
 
 from pathlib import Path
