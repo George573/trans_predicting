@@ -1,6 +1,7 @@
 # Dry-plan: приведение репозитория к модульной структуре
 
-Статус: план, ничего не выполнено. Зафиксировано 27.09.2026.
+Статус: план, реструктуризация не начата. Шаг 6 (единый Go-сервис) уже сделан на `main` вне
+этого плана, см. «Текущее состояние». Зафиксировано 27.09.2026.
 
 Цель - разложить проект по модулям в порядке, который требует кейс: приём и нормализация
 данных -> признаки и геопривязка -> ML-прогноз и агрегация -> API -> frontend. Один
@@ -8,8 +9,19 @@
 
 ## Текущее состояние
 
-- Проект разнесён по трём веткам: `main` (ML, исследования, внешние данные), `feature/cnn`
-  (основная модель и Go-сервис с CNN), `go-inference-stand` (Go-стенд на CatBoost).
+- Проект разнесён по трём веткам: `main` (ML, исследования, внешние данные и Go-сервис),
+  `feature/cnn` (код и обучение CNN, прежний Go-стенд с CNN и встроенным интерфейсом),
+  `go-inference-stand` (прежний Go-стенд на CatBoost).
+- Два Go-стенда уже слиты в один модуль `service/` на `main`: пакеты `internal/catboost`,
+  `internal/cnn`, `internal/features`, `internal/conditions`, `internal/forecast`,
+  `internal/bundle`, `internal/api`; команды `cmd/server` и `cmd/load`. Golden-сверка обеих
+  моделей выполняется при каждом старте сервера, отдельной команды `cmd/check` нет.
+  Встроенного интерфейса в `service/` нет, сервер раздаёт собранный интерфейс флагом `-static`.
+- `Dockerfile` и `docker-compose.yml` лежат в корне репозитория.
+- Бандлы моделей закоммичены в `artifacts/bundle/` (около 7.6 МБ: `model.cbm` 2.6 МБ,
+  `head.json` 3.5 МБ, два `reference.csv`), их собирают `export_bundle.py` и
+  `export_cnn_bundle.py` в корне. Это противоречит правилу целевой структуры «`artifacts/`
+  в gitignore, кроме маленьких json» и требует решения, см. «Открытые решения».
 - В корне `main` 12 Python-модулей и 4 ноутбука, модули импортируют друг друга напрямую
   (`from backtest import ...`). Нет пакета, нет `pyproject.toml` или `requirements.txt`.
 - Пути к данным зашиты относительно корня (`"dataset/labels/..."`, `"input/calendar/2025.xml"`)
@@ -52,12 +64,15 @@ research/                    исследования, не продакшн
   geo/                          loro_experiment.py
   notebooks/                    analysis, *_baseline.ipynb, train.ipynb от CNN
   archive/                      отклонённые подходы
-service/                     4. Go-модуль, одна точка сборки
-  cmd/server, cmd/load, cmd/check
-  internal/cnnhead/             голова CNN
-  internal/cbfast/              CatBoost, резерв из go-inference-stand
+service/                     4. Go-модуль, одна точка сборки - уже на main
+  cmd/server, cmd/load          сервер (golden-сверка при старте) и нагрузочный клиент
+  internal/catboost/            CatBoost через libcatboostmodel
+  internal/cnn/                 голова CNN
   internal/features/            календарные признаки
-  web/                          встроенный UI
+  internal/conditions/          каталог условий
+  internal/forecast/            прогноз, коридор, обычный уровень
+  internal/bundle/              чтение и проверка бандлов
+  internal/api/                 HTTP API по api/openapi.yaml
 frontend/                    5. будущий React-дашборд (пока README-заглушка)
 data/                        всё, что читается кодом
   raw/                          train.csv, test.csv - gitignore
@@ -87,8 +102,9 @@ Makefile                     единые точки входа
 | `experiments/`, `geo/loro_experiment.py` | `research/horizon/`, `research/geo/` | |
 | `*.ipynb` в корне | `research/notebooks/` | |
 | `feature/cnn`: `src/`, `tests/`, `configs/` | `src/tram_forecast/`, `tests/tram_forecast/`, `configs/` | через `git mv`, чтобы сохранить историю |
-| `feature/cnn`: `service/` + `go-inference-stand`: `bench/go-inference-stand/` | один модуль `service/` | CatBoost - альтернативный бэкенд модели за общим интерфейсом |
-| `Dockerfile`, `docker-compose.yml` | `deploy/` | восстановить команду `export-head`, которой сейчас нет в CLI CNN |
+| `feature/cnn`: `service/` + `go-inference-stand`: `bench/go-inference-stand/` | один модуль `service/` | сделано на `main`: CatBoost и CNN - две модели, выбор полем `model` запроса |
+| `Dockerfile`, `docker-compose.yml` (корень `main`) | `deploy/` | поправить контекст сборки; экспорт головы CNN теперь `export_cnn_bundle.py`, команда `export-head` в CLI CNN не нужна |
+| `export_bundle.py`, `export_cnn_bundle.py` | `tram_ml/` и `tram_forecast/` или `tools/` | цель `export` в Makefile |
 | `artifacts/submissions/*.csv`, `artifacts/preds/*.parquet` | GitHub Release или Git LFS | `git rm --cached`; таблица `RESULTS.md` -> в docs |
 | `catboost_info/`, `__pycache__/`, `.DS_Store` | удалить | уже в gitignore, но физически лежат |
 | `final/` | содержимое -> корневой `README.md` и `docs/` | поправить путь в `tools/charts.py` |
@@ -127,7 +143,7 @@ Makefile                     единые точки входа
 | 3 | сборщики и данные в `tram_data` и `data/` | пересборка `factors_hourly` и `events_hourly` совпадает с текущими CSV |
 | 4 | вливание `feature/cnn` через `git mv` | тесты CNN зелёные, прогноз тем же чекпойнтом совпадает |
 | 5 | общий календарь для обеих моделей | признаки CNN до и после совпадают |
-| 6 | слияние двух Go-сервисов в `service/` | `cmd/check` (golden-сверка) проходит для CatBoost и CNN |
+| 6 | слияние двух Go-сервисов в `service/` - **сделано на `main`** | сервер стартует: golden-сверка при старте проходит для CatBoost и CNN; после шагов 4-5 повторить её на пересобранных бандлах |
 | 7 | `deploy/`, сборка образа | `docker compose up` в чистом окружении, `/healthz` = ok |
 | 8 | вынос бинарников из git, `final/` -> корень, `docs/notes/` | все ссылки в docs живые |
 | 9 | CI: ruff + pytest + `go test` + сборка образа | зелёный прогон |
@@ -143,4 +159,11 @@ Makefile                     единые точки входа
    она необратима и ломает клоны команды. Достаточно перестать отслеживать файлы дальше.
 3. **Один `pyproject.toml` с тремя пакетами** (как в плане) или workspace из трёх проектов.
    Предпочтение - один: проще, зависимости почти общие.
-4. **CatBoost в сервисе** - второй бэкенд за флагом или только отдельный стенд для резерва.
+4. ~~**CatBoost в сервисе** - второй бэкенд за флагом или только отдельный стенд для резерва.~~
+   Решено: CatBoost - вторая модель в том же сервисе, выбирается на каждый запрос полем
+   `model` (`catboost` по умолчанию или `cnn`).
+5. **Бандлы в git.** Сейчас `artifacts/bundle/` (около 7.6 МБ) закоммичен: образ собирается из
+   репозитория без шага экспорта, а CNN-бандл без чекпойнта не пересобрать. План же держит
+   `artifacts/` в gitignore, кроме маленьких json. Нужно решить: оставить бандлы в git как
+   исключение, вынести в Release или LFS вместе с остальными бинарниками или собирать их
+   шагом сборки.
