@@ -1,0 +1,54 @@
+{
+  "version": "2026-09-27T16:54:13Z/4d636a",
+  "model": "catboost_cyclic_service",
+  "mode": "service",
+  "train_period": [
+    "2025-01-01",
+    "2025-10-31"
+  ],
+  "horizon": [
+    "2025-01-01",
+    "2026-04-30"
+  ],
+  "wape_score": 0.8929,
+  "folds": {
+    "fold3": 0.8875,
+    "fold4": 0.9032
+  },
+  "features": [
+    "hour",
+    "route",
+    "is_holiday",
+    "is_weekend",
+    "is_short_working_day",
+    "season",
+    "weekday",
+    "hour_sin",
+    "hour_cos",
+    "weekday_sin",
+    "weekday_cos",
+    "day_of_month_sin",
+    "day_of_month_cos",
+    "days_before_block",
+    "days_after_block",
+    "in_block"
+  ],
+  "cat_features": [
+    "route",
+    "is_holiday",
+    "is_weekend",
+    "is_short_working_day",
+    "season",
+    "weekday"
+  ],
+  "trees": 625,
+  "catboost": "1.2.10",
+  "created_at": "2026-09-27T16:54:13Z",
+  "train_seconds": 8.0,
+  "reference": {
+    "from": "2025-11-01",
+    "to": "2025-12-31",
+    "rows": 14640,
+    "raw_tolerance": 1e-06
+  }
+}

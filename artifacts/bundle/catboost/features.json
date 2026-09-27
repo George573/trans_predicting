@@ -1,0 +1,28 @@
+{
+  "features": [
+    "hour",
+    "route",
+    "is_holiday",
+    "is_weekend",
+    "is_short_working_day",
+    "season",
+    "weekday",
+    "hour_sin",
+    "hour_cos",
+    "weekday_sin",
+    "weekday_cos",
+    "day_of_month_sin",
+    "day_of_month_cos",
+    "days_before_block",
+    "days_after_block",
+    "in_block"
+  ],
+  "cat_features": [
+    "route",
+    "is_holiday",
+    "is_weekend",
+    "is_short_working_day",
+    "season",
+    "weekday"
+  ]
+}

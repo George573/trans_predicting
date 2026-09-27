@@ -63,3 +63,6 @@ temp/
 dataset/test.csv
 dataset/train.csv
 .claude
+
+# Model checkpoints
+*.pt
