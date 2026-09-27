@@ -1,0 +1,8 @@
+# Классическая модель и сборка файла прогноза: python3 make_submission.py
+polars>=1.30
+numpy>=2.0
+pandas>=2.2
+pyarrow>=18
+scikit-learn>=1.5
+catboost>=1.2
+torch>=2.4
