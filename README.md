@@ -38,6 +38,10 @@ name after adding these inputs.
 
 ## Project layout
 
+For the current model's context/day inference API, see
+[the Python runner example](docs/inference_example.md) and
+[executable demonstration](examples/inference.py).
+
 | Path | Purpose |
 |---|---|
 | `src/tram_forecast/config.py` | Data and training settings |

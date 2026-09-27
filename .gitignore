@@ -220,6 +220,8 @@ __marimo__/
 # Local transport data and generated artifacts
 /dataset/*
 !/dataset/README.md
+!/dataset/labels
+!/dataset/parking_events_hourly.csv
 /samples/
 /outputs/
 /output/

@@ -84,24 +84,39 @@ class Boardings:
         return self.counts[self.routes.index(route), offset : offset + 24].copy()
 
 
-def sample(boardings, route, cutoff, forecast_days, history_days, *, include_target=True):
-    """Assemble calendar and hourly event inputs; targets are optional for inference."""
+def history_inputs(boardings, route, cutoff, history_days):
+    """Prepare one history without requiring any future schedule or labels."""
     if boardings.scheduled_events is None:
         raise ValueError("Load Boardings with events_path before sampling model inputs")
     first = datetime.combine(cutoff, day_time.min) - timedelta(days=history_days)
-    requested = [cutoff + timedelta(days=d) for d in range(forecast_days)]
     history_events = boardings.scheduled_events.window(route, first.date(), history_days * 24)
-    future_events = boardings.scheduled_events.window(route, cutoff, forecast_days * 24)
-    # A target-day flag is 1 if the event is active at any hour of that day.
-    future_events = future_events.T.reshape(forecast_days, 24, len(EVENT_FEATURES)).max(axis=1)
-    result = {
+    return {
         "counts": boardings.history(route, cutoff, history_days)[None, :],
         "calendar": np.concatenate((
             calendar(first + timedelta(hours=i) for i in range(history_days * 24)),
             history_events,
         )),
+    }
+
+
+def request_inputs(events, route, days):
+    """Prepare each requested day's calendar and daily event reductions."""
+    if events is None:
+        raise ValueError("Load Boardings with events_path before sampling model inputs")
+    days = list(days)
+    daily_events = np.stack([
+        events.window(route, day, 24).max(axis=1) for day in days
+    ])
+    return np.concatenate((request_calendar(days), daily_events), axis=1)
+
+
+def sample(boardings, route, cutoff, forecast_days, history_days, *, include_target=True):
+    """Assemble calendar and hourly event inputs; targets are optional for inference."""
+    requested = [cutoff + timedelta(days=d) for d in range(forecast_days)]
+    result = {
+        **history_inputs(boardings, route, cutoff, history_days),
         "route_index": ROUTES.index(route) + 1,
-        "request_calendar": np.concatenate((request_calendar(requested), future_events), axis=1),
+        "request_calendar": request_inputs(boardings.scheduled_events, route, requested),
         "lead": np.arange(1, forecast_days + 1, dtype=np.float32),
     }
     if include_target:

@@ -11,6 +11,8 @@ from tram_forecast.evaluate import evaluate_model
 from tram_forecast.model import ForecastNetwork
 from tram_forecast.predict import fixed_forecast
 from tram_forecast.train import load_model, train
+from tram_forecast.runner import InferenceRunner
+from unittest.mock import patch
 
 
 def write_events(path, days=90):
@@ -140,3 +142,50 @@ def test_editing_the_csv_refreshes_the_cache(store):
     assert refreshed is not previous
     assert previous.window(1, date(2025, 9, 1), 24)[0, 0] == 1
     assert refreshed.window(1, date(2025, 9, 1), 24)[0, 0] == 0
+
+
+def test_runner_reuses_context_and_matches_existing_forecast(store):
+    boardings, _ = store
+    model = ForecastNetwork(1)
+    runner = InferenceRunner(model)
+    cutoff = date(2025, 9, 15)
+    expected = fixed_forecast(model, boardings, cutoff, 61, 14)
+    with patch.object(model, "encode_history", wraps=model.encode_history) as encode:
+        context = runner.apply_context(boardings, 7, cutoff)
+        for offset in (0, 4, 60):
+            got = runner.predict_day(context, cutoff + timedelta(days=offset))
+            assert got.shape == (24,) and got.dtype == np.float32
+            np.testing.assert_allclose(got, expected[0, offset], rtol=1e-5, atol=1e-5)
+        assert encode.call_count == 1
+    combined = runner.predict(boardings, 7, cutoff, cutoff)
+    np.testing.assert_allclose(combined, expected[0, 0], rtol=1e-5, atol=1e-5)
+
+
+def test_runner_keeps_contexts_independent_and_rejects_foreign_context(store):
+    boardings, _ = store
+    runner = InferenceRunner(ForecastNetwork(1))
+    cutoff = date(2025, 9, 15)
+    context = runner.apply_context(boardings, 7, cutoff)
+    expected = runner.predict_day(context, cutoff)
+    runner.apply_context(boardings, 1, cutoff + timedelta(days=1))
+    np.testing.assert_array_equal(runner.predict_day(context, cutoff), expected)
+    other = InferenceRunner(ForecastNetwork(1))
+    with pytest.raises(ValueError, match="different runner"):
+        other.predict_day(context, cutoff)
+    for day in (cutoff - timedelta(days=1), cutoff + timedelta(days=61)):
+        with pytest.raises(ValueError, match="within 61 days"):
+            runner.predict_day(context, day)
+
+
+def test_apply_context_does_not_require_future_events_or_labels(store, tmp_path, monkeypatch):
+    boardings, _ = store
+    events = tmp_path / "history_only.csv"
+    write_events(events, days=14)
+    boardings.scheduled_events = load_events(events)
+    def forbidden(*args):
+        raise AssertionError("Runner read future boarding labels")
+    monkeypatch.setattr(boardings, "target", forbidden)
+    runner = InferenceRunner(ForecastNetwork(1))
+    context = runner.apply_context(boardings, 7, date(2025, 9, 15))
+    with pytest.raises(ValueError, match="do not cover"):
+        runner.predict_day(context, date(2025, 9, 15))
