@@ -19,7 +19,7 @@ package "Сервис, Go - реализован" {
   [Слой условий\nпроизведение, аудит] as layer
   [API по контракту OpenAPI 3.1\nPOST forecast, export CSV/XLSX,\nexplain, conditions, routes, geo] as api
 }
-[Дашборд\nReact + TypeScript,\nкарта Leaflet\n(не сделан)] as ui #EEEEEE
+[Дашборд\nReact + TypeScript,\nкарта Leaflet\n(в разработке)] as ui #EEEEEE
 m --> model
 cal --> post
 pp --> post
