@@ -19,7 +19,7 @@ package "Сервис, Go - реализован" {
   [Слой условий\nпроизведение, аудит] as layer
   [API по контракту OpenAPI 3.1\nPOST forecast, export CSV/XLSX,\nexplain, conditions, routes, geo] as api
 }
-[Дашборд\nReact + TypeScript,\nкарта Leaflet\n(в разработке)] as ui #EEEEEE
+[Дашборд\nReact + TypeScript,\nкарта Leaflet,\nсравнение моделей] as ui
 m --> model
 cal --> post
 pp --> post
@@ -30,6 +30,6 @@ post --> corr
 corr --> layer
 layer --> api
 geo --> api
-api ..> ui
-user ..> ui
+api --> ui
+user --> ui
 @enduml

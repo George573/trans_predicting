@@ -25,12 +25,19 @@
 
 ## Локальный запуск
 
+Сначала сервис на `localhost:8080` (из `../service`: `bash scripts/fetch_libs.sh`,
+`go run ./cmd/server`), затем дашборд. Vite проксирует `/api`, `/geo` и `/healthz` на сервис:
+
 ```sh
 pnpm install
-pnpm api
-pnpm dev
+pnpm dev                          # http://localhost:5173
+VITE_FORECAST_MOCK=1 pnpm dev     # без сервиса, ответы из ../api/examples/
+pnpm api                          # перегенерировать типы после правки контракта
 ```
 
-`VITE_API_URL` нужен только если API запущен на другом origin. В общей поставке
-используется тот же origin. Сейчас в репозитории есть только каркас интерфейса;
-примеры ответов для разработки лежат в `../api/examples/`.
+В поставке дашборд собирается в образе вместе с сервисом (`../Dockerfile`) и отдаётся тем же
+Go-бинарником на том же origin, см. «Запуск стенда» в корневом `README.md`. `VITE_API_URL`
+нужен только если API запущен на другом origin.
+
+Геометрия линий и остановок приходит из сервиса, `/geo/routes.geojson`: это тот же файл
+`web/geo/routes.geojson`, по которому сервис считает `has_geometry` маршрутов.

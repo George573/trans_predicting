@@ -7,7 +7,10 @@ node "Репозиторий" as repo {
   artifact "Календари 2024-2026\nи геометрия линий" as ref
 }
 node "Сборка образа, Docker" {
-  node "Стадия 1: golang:1.24-bookworm" as s1 {
+  node "Стадия 1: pnpm, Node 24" as s0 {
+    component "Статика дашборда\ndashboard/dist" as web
+  }
+  node "Стадия 2: golang:1.24-bookworm" as s1 {
     component "libcatboostmodel" as lib
     component "Бинарник сервера (cgo)" as bin
   }
@@ -16,12 +19,13 @@ node "Прод-хост" as host {
   component "nginx\nhttps://mttech.k1rles.ru" as nginx
   component "Прежний стенд\nкопия для отката" as old
   node "Контейнер: debian:bookworm-slim, nobody" as run {
-    component "Go-сервер\nтолько API" as srv
+    component "Go-сервер\nAPI и дашборд" as srv
   }
 }
-actor "Клиент API" as cl
+actor "Диспетчер, клиент API" as cl
 lib --> srv
 bin --> srv
+web --> srv
 bnd --> srv
 ref --> srv
 cl --> nginx : HTTPS
