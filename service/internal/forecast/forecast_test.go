@@ -129,3 +129,35 @@ func TestCorridorBracketsBase(t *testing.T) {
 		}
 	}
 }
+
+func TestCorridorFloorsByHorizon(t *testing.T) {
+	var routes []int
+	for _, r := range features.Routes {
+		if r != 5 {
+			routes = append(routes, r)
+		}
+	}
+	g, err := engine.Grid(routes, date("2025-11-01"), 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &engine.Bundle.Corridor
+	for horizon, f := range map[string]float64{"season": 0.3, "month": 0.2} {
+		lo, hi := g.Corridor(c, horizon, true)
+		for i := range g.Routes {
+			for j, b := range forecast.Daily(g.Base[i]) {
+				if lo[i][j] > (1-f)*b+1e-9 || hi[i][j] < (1+f)*b-1e-9 {
+					t.Fatalf("%s route %d day %d: [%v, %v] narrower than %v +-%v", horizon, g.Routes[i], j, lo[i][j], hi[i][j], b, f)
+				}
+			}
+		}
+	}
+	lo, hi := g.Corridor(c, "day", false)
+	for i := range g.Routes {
+		for j, b := range g.Base[i] {
+			if lo[i][j] > b || hi[i][j] < b {
+				t.Fatalf("day route %d point %d: %v not in [%v, %v]", g.Routes[i], j, b, lo[i][j], hi[i][j])
+			}
+		}
+	}
+}

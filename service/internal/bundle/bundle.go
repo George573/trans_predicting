@@ -45,6 +45,7 @@ type Corridor struct {
 	Hourly    map[string]map[string][2]float64 `json:"hourly"`
 	Daily     map[string][2]float64            `json:"daily"`
 	Widen     map[string]float64               `json:"widen"`
+	Floor     map[string]float64               `json:"floor"`
 	band      [24]string
 }
 
@@ -189,6 +190,9 @@ func (c *Corridor) check() error {
 		if c.Widen[h] <= 0 {
 			return fmt.Errorf("нет расширения коридора для горизонта %s", h)
 		}
+		if f := c.Floor[h]; f < 0 || f >= 1 {
+			return fmt.Errorf("минимальная полуширина коридора %g для горизонта %s вне [0, 1)", f, h)
+		}
 	}
 	return nil
 }
@@ -218,8 +222,8 @@ func (c *Corridor) DayQ(route int) [2]float64 {
 }
 
 func (c *Corridor) Bounds(q [2]float64, horizon string, base float64) (float64, float64) {
-	w := c.Widen[horizon]
-	return max(0, base*(1-(1-q[0])*w)), base * (1 + (q[1]-1)*w)
+	w, f := c.Widen[horizon], c.Floor[horizon]
+	return max(0, min(base*(1-(1-q[0])*w), base*(1-f))), max(base*(1+(q[1]-1)*w), base*(1+f))
 }
 
 func (p *Postprocess) NewYearFactor(d time.Time, hour int) float64 {

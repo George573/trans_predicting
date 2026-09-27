@@ -44,6 +44,7 @@ HORIZON = ["2025-01-01", "2026-04-30"]
 BANDS = {"night": [0, 5], "morning": [6, 10], "midday": [11, 16], "evening": [17, 23]}
 LEADS = {"day": (1, 1), "week": (1, 7), "month": (1, 31), "season": (32, 61)}
 QUANTILES = (0.1, 0.9)
+FLOOR = {"day": 0.0, "week": 0.0, "month": 0.2, "season": 0.3}
 MIN_PRED = 1.0
 KEY = ["route", "date", "hour"]
 
@@ -72,8 +73,9 @@ def band() -> pl.Expr:
     return expr.alias("band")
 
 
-def quantiles(ratio: pl.Series) -> list[float]:
-    return [round(float(ratio.quantile(q, "linear")), 4) for q in QUANTILES]
+def quantiles(ratio: pl.Series, median: float) -> list[float]:
+    lo, hi = (float(ratio.quantile(q, "linear")) / median for q in QUANTILES)
+    return [round(min(lo, 1.0), 4), round(max(hi, 1.0), 4)]
 
 
 def spread(ratio: pl.Series) -> float:
@@ -83,17 +85,27 @@ def spread(ratio: pl.Series) -> float:
 def corridor(oof: pl.DataFrame) -> dict:
     cells = (oof.filter((pl.col("route") != 5) & (pl.col("pred") >= MIN_PRED))
              .with_columns(band(), (pl.col("target") / pl.col("pred")).alias("ratio")))
-    hourly = {"*": {b: quantiles(g["ratio"]) for (b,), g in cells.group_by("band")}}
-    for (route, b), g in cells.group_by(["route", "band"]):
-        hourly.setdefault(str(route), {})[b] = quantiles(g["ratio"])
     days = (oof.filter(pl.col("route") != 5).group_by(["fold", "route", "date"])
             .agg(pl.col("target").sum(), pl.col("pred").sum())
             .filter(pl.col("pred") >= MIN_PRED).with_columns((pl.col("target") / pl.col("pred")).alias("ratio")))
-    daily = {"*": quantiles(days["ratio"])} | {str(r): quantiles(g["ratio"]) for (r,), g in days.group_by("route")}
+    median = {"*": float(days["ratio"].median())} | {
+        str(r): float(days.filter(pl.col("route") == r)["ratio"].median()) for r in sorted(days["route"].unique())}
+    groups = {key: pl.lit(True) if key == "*" else pl.col("route") == int(key) for key, m in median.items() if m > 0}
+    hourly = {key: {b: quantiles(g["ratio"], median[key]) for b in BANDS
+                    if (g := cells.filter(where & (pl.col("band") == b))).height} for key, where in groups.items()}
+    daily = {key: quantiles(days.filter(where)["ratio"], median[key]) for key, where in groups.items()}
     ref = spread(cells["ratio"])
-    widen = {k: round(spread(cells.filter(pl.col("lead").is_between(lo, hi))["ratio"]) / ref, 3)
-             for k, (lo, hi) in LEADS.items()}
-    return {"quantiles": list(QUANTILES), "bands": BANDS, "hourly": hourly, "daily": daily, "widen": widen}
+    raw = {k: spread(cells.filter(pl.col("lead").is_between(lo, hi))["ratio"]) / ref for k, (lo, hi) in LEADS.items()}
+    raw["day"] = raw["week"]
+    widen, top = {}, 0.0
+    for k in LEADS:
+        top = max(top, raw[k])
+        widen[k] = round(top, 3)
+    pairs = [q for g in hourly.values() for q in g.values()] + list(daily.values())
+    assert all(q[0] <= 1 <= q[1] for q in pairs), pairs
+    assert list(widen.values()) == sorted(widen.values()), widen
+    return {"quantiles": list(QUANTILES), "bands": BANDS, "hourly": hourly, "daily": daily, "widen": widen,
+            "floor": FLOOR}
 
 
 def new_year_table() -> dict[str, list[float]]:
@@ -113,8 +125,8 @@ def write(path: Path, obj: dict) -> None:
 
 def main(out: Path) -> None:
     started = time.time()
-    with open("artifacts/catboost/model_meta.json", encoding="utf-8") as f:
-        meta = json.load(f)
+    with open("artifacts/catboost/model_meta.json", encoding="utf-8") as meta_file:
+        meta = json.load(meta_file)
     calendar = load_calendar("input/calendar/2025.xml")
     train = enrich_features(load_labels("dataset/labels/labels_day_train.csv", date(2025, 1, 1), date(2025, 8, 31), routes=ROUTES), calendar)
     test = enrich_features(load_labels("dataset/labels/labels_day_test.csv", date(2025, 9, 1), date(2025, 10, 31), routes=ROUTES), calendar)
@@ -153,7 +165,7 @@ def main(out: Path) -> None:
     final.save_model(str(model_path))
     reference.write_csv(out / "reference.csv")
     kmap: dict[str, dict[str, float]] = {}
-    for route, weekday, v in k.select("route", "weekday", "k").iter_rows():
+    for route, weekday, v in k.filter(pl.col("route") != 5).sort("route", "weekday").select("route", "weekday", "k").iter_rows():
         kmap.setdefault(str(route), {})[str(weekday)] = v
     created = datetime.now(timezone.utc).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
     digest = hashlib.sha256(model_path.read_bytes()).hexdigest()
