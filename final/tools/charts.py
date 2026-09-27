@@ -38,12 +38,13 @@ def score_progress():
         ("+ погода", 0.88466),
     ]
     cnn = [("+ флаги\nкалендаря", 0.88158), ("+ официальный\nкалендарь", 0.88409),
-           ("+ события", 0.88499)]
+           ("+ события", 0.88499),
+           ("финальная\nверсия", 0.88646)]
     fig, axes = plt.subplots(1, 2, figsize=(13, 4.4), constrained_layout=True,
-                             gridspec_kw={"width_ratios": [8, 3.6]}, sharey=True)
+                             gridspec_kw={"width_ratios": [8, 4.6]}, sharey=True)
     for ax, rows, color, title in [
         (axes[0], ml, BLUE, "Classical ML: путь к 0.88466"),
-        (axes[1], cnn, GREEN, "CNN: путь к 0.88499"),
+        (axes[1], cnn, GREEN, "CNN: путь к 0.88646"),
     ]:
         x = np.arange(len(rows))
         vals = [v for _, v in rows]
