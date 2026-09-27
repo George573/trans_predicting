@@ -1,0 +1,4 @@
+lib/
+bin/
+*.log
+bodies*.jsonl
