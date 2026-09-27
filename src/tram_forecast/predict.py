@@ -14,12 +14,12 @@ from .data import ROUTES, sample
 
 
 @torch.no_grad()
-def fixed_forecast(model, boardings, cutoff, days):
+def fixed_forecast(model, boardings, cutoff, days, history_days):
     model.eval()
     device = next(model.parameters()).device
     results = []
     for route in boardings.routes:
-        s = sample(boardings, route, cutoff, days)
+        s = sample(boardings, route, cutoff, days, history_days=history_days)
         history = {
             "counts": torch.as_tensor(s["counts"][None], device=device, dtype=torch.float32),
             "calendar": torch.as_tensor(s["calendar"][None], device=device, dtype=torch.float32),
@@ -61,8 +61,8 @@ def write_submission(template, output, predictions, start, end):
     return len(ordered)
 
 
-def predict(model, boardings, template, output, cutoff, days):
-    values = fixed_forecast(model, boardings, cutoff, days)
+def predict(model, boardings, template, output, cutoff, days, history_days):
+    values = fixed_forecast(model, boardings, cutoff, days, history_days)
     predictions = {
         (route, cutoff + timedelta(days=d), h): float(values[i, d, h])
         for i, route in enumerate(boardings.routes)

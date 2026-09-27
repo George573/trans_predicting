@@ -2,8 +2,15 @@
 
 A boarding-only PyTorch CNN that encodes a route's hourly history once and predicts
 24 boarding counts for each requested future day. Calendar features, route identity
-and forecast lead condition the predictions. The default history is 21 days and the
+and forecast lead condition the predictions. The model uses 14 days of history and the
 forecast horizon is seven days, configurable up to 61.
+
+Calendar inputs include binary `is_holiday`: 1 for Russian federal public holidays
+and transferred days off, 0 otherwise. Ordinary weekends use the weekday features.
+The checked-in calendar covers 2025; other years need their official transfers added
+in `src/tram_forecast/russian_calendar.py`. The flag is included in both hourly
+history and requested forecast days. Models trained before this feature was added
+must be retrained because the input dimensions changed.
 
 ## Project layout
 

@@ -6,21 +6,26 @@ adaptive-pooling options.
 
 | Layer | Output per context |
 |---|---|
-| Boarding counts / scale + six calendar channels | 7 × 504 |
-| Conv1d(7, 32, kernel=5), GELU, MaxPool1d(2) | 32 × 252 |
-| Conv1d(32, 32, kernel=5), GELU, MaxPool1d(2) | 32 × 126 |
-| Conv1d(32, 16, kernel=3), GELU, MaxPool1d(3) | 16 × 42 |
-| Flatten | 672 |
-| Append route embedding (8), target calendar (4), lead (1) | 685 |
-| Linear(685, 250), GELU, dropout(0.1), Linear(250, 24) | 24 |
+| Boarding counts / scale + seven calendar channels | 8 × 336 |
+| Conv1d(8, 40, kernel=50), GELU, MaxPool1d(2), dropout(0.2) | 40 × 168 |
+| Conv1d(40, 40, kernel=50), GELU, MaxPool1d(2), dropout(0.2) | 40 × 84 |
+| Conv1d(40, 20, kernel=50), GELU, MaxPool1d(2), dropout(0.2) | 20 × 42 |
+| Flatten | 840 |
+| Append route embedding (8), target calendar (5), lead (1) | 854 |
+| Linear(854, 320), GELU, dropout(0.1), Linear(320, 320), GELU, dropout(0.1), Linear(320, 24) | 24 |
 | Softplus × count scale | 24 nonnegative boarding predictions |
 
 Convolutions use padding to preserve length before pooling. History is always
-21 days. Its calendar channels encode sine/cosine of hour, weekday and day of month.
-Target calendar omits hour. Lead is `(lead−1)/60`, with integer leads 1–61.
+14 days. Its calendar channels encode sine/cosine of hour, weekday and day of month,
+followed by binary `is_holiday`. Target calendar omits the two hour channels and
+retains the holiday flag. Russian federal public holidays and transferred days off
+are marked 1; ordinary weekends are not. The calendar covers 2025, including
+transfers under Resolution No. 1335 of 4 October 2024
+(https://government.ru/docs/52895/). Unsupported years raise an error; regional
+holidays are excluded. Lead is `(lead−1)/60`, with integer leads 1–61.
 Count scale is `max(1, mean fitting-period counts)`.
 
-`ForecastNetwork(scale)` accepts `counts [B,1,504]` and `calendar [B,6,504]`.
+`ForecastNetwork(scale)` accepts `counts [B,1,336]` and `calendar [B,7,336]`.
 A batch contains B route/cutoff contexts and R requested days. Request
 `context_indices [R]` select their shared encoded histories; route indices, target
 calendar and leads condition the head. Output and targets are `[R,24]`.
@@ -33,7 +38,7 @@ Training retains MAE, AdamW, requested-day-weighted accumulation, validation WAP
 and epoch-boundary resume. Run settings live in `configs/default.json`; layer
 changes belong in `model.py`, not in configuration.
 
-The fixed CNN uses checkpoint format 3 and needs fresh training. Previous
-multiscale checkpoints cannot be loaded, resumed or exported by this version.
-Prepared boarding artifacts remain format 2 and can be reused. The Go service
-uses a newly exported head; its request-time computation is unchanged.
+Adding the holiday feature changes the first convolution and the head input
+dimensions. Checkpoints trained without it need fresh training. The legacy Go
+service and head exporter still assume four target-calendar features and need
+updating before they can serve models with this feature.

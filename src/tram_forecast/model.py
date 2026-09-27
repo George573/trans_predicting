@@ -1,4 +1,4 @@
-"""A fixed CNN for 21 days of hourly boarding history."""
+"""A fixed CNN for 14 days of hourly boarding history and holiday features."""
 
 import math
 
@@ -28,23 +28,29 @@ class ForecastNetwork(nn.Module):
         self.register_buffer("scale", torch.tensor(float(scale)))
 
         self.encoder = nn.Sequential(
-            nn.Conv1d(7, 32, kernel_size=35, padding="same", dilation=2),
+            nn.Conv1d(8, 40, kernel_size=50, padding="same"),
             nn.GELU(),
+            nn.MaxPool1d(kernel_size=2),
             nn.Dropout(0.2),
-            nn.Conv1d(32, 16, kernel_size=35, padding="same"),
+            nn.Conv1d(40, 40, kernel_size=50, padding="same"),
             nn.GELU(),
+            nn.MaxPool1d(kernel_size=2),
             nn.Dropout(0.2),
-            nn.Conv1d(16, 1, kernel_size=24, padding="same"),
+            nn.Conv1d(40, 20, kernel_size=50, padding="same"),
             nn.GELU(),
+            nn.MaxPool1d(kernel_size=2),
             nn.Dropout(0.2),
-            nn.Flatten(1),  # 504 hours, 1 channel -> 504 features
+            nn.Flatten(1),  # 42 * 20 = 840
         )
         self.route = nn.Embedding(10, 8)
         self.head = nn.Sequential(
-            nn.Linear(504 + 8 + 4 + 1, 250),  # history, route, calendar, lead
+            nn.Linear(840 + 8 + 5 + 1, 320),  # history, route, calendar, lead
             nn.GELU(),
             nn.Dropout(0.1),
-            nn.Linear(250, 24),
+            nn.Linear(320, 320),  # history, route, calendar, lead
+            nn.GELU(),
+            nn.Dropout(0.1),
+            nn.Linear(320, 24),
         )
         nn.init.constant_(self.head[-1].bias, math.log(math.expm1(1)))
 
