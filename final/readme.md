@@ -134,8 +134,31 @@ Go-сервис в `service/` держит в памяти обе модели -
 | CNN на 2026-01-01 ... 2026-04-30 | реализовано авторегрессией в бандле, точность дальше трёх месяцев не проверена |
 | CNN вне 2025-11-01 ... 2026-04-30 | нужен новый бандл |
 
+![Экран диспетчера: вся сеть за сутки](docs/img/dash_main.jpg)
+
 Устройство, диаграммы и границы реализации - [system.md](docs/system.md), запуск, бандлы и
 известные ограничения сервиса - `service/README.md`, контракт - `api/openapi.yaml`.
+
+## Как запустить стенд
+
+Развёрнутый стенд: https://mttech.k1rles.ru - дашборд на корне, API на `/api/v1`.
+
+Локально нужен только Docker с Compose: бандлы обеих моделей лежат в репозитории, датасет для
+запуска не нужен.
+
+    docker compose up -d --build                          # http://127.0.0.1:8090
+    STAND_AUTH=jury:secret docker compose up -d --build   # то же под basic auth
+    docker compose logs server                            # строки сверки обеих моделей с эталоном
+    curl http://127.0.0.1:8090/healthz                    # версии бандлов, status ok
+
+Один контейнер отдаёт и дашборд, и API. При старте сервер пересчитывает эталон обеих моделей и
+не запускается, если сверка не прошла, поэтому ответ `/healthz` означает, что модели в памяти
+совпадают с обученными в Python.
+
+Для разработки без Docker: сервис из `service/` (`bash scripts/fetch_libs.sh`,
+`go run ./cmd/server`, API на `localhost:8080`), дашборд из `dashboard/` (`pnpm install`,
+`pnpm dev`, http://localhost:5173 с прокси на сервис; `VITE_FORECAST_MOCK=1 pnpm dev` работает
+без сервиса на примерах ответов).
 
 ![Общая схема решения](docs/img/diagram-system-overview.svg)
 
