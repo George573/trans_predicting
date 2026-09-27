@@ -1,11 +1,11 @@
-"""A fixed CNN for 14 days of hourly boarding history and holiday features."""
+"""A fixed CNN for 14-day history, calendar and advance-known hourly events."""
 
 import math
 
 import torch
 from torch import nn
 
-from .data import HISTORY_CALENDAR_FEATURES, REQUEST_CALENDAR_FEATURES
+from .data import HISTORY_INPUT_FEATURES, REQUEST_INPUT_FEATURES
 
 
 class ParallelConv1d(nn.Module):
@@ -30,7 +30,7 @@ class ForecastNetwork(nn.Module):
         self.register_buffer("scale", torch.tensor(float(scale)))
 
         self.encoder = nn.Sequential(
-            nn.Conv1d(1 + len(HISTORY_CALENDAR_FEATURES), 40, kernel_size=50, padding="same"),
+            nn.Conv1d(1 + len(HISTORY_INPUT_FEATURES), 40, kernel_size=50, padding="same"),
             nn.GELU(),
             nn.MaxPool1d(kernel_size=2),
             nn.Dropout(0.2),
@@ -46,7 +46,7 @@ class ForecastNetwork(nn.Module):
         )
         self.route = nn.Embedding(10, 8)
         self.head = nn.Sequential(
-            nn.Linear(840 + 8 + len(REQUEST_CALENDAR_FEATURES) + 1, 320),
+            nn.Linear(840 + 8 + len(REQUEST_INPUT_FEATURES) + 1, 320),
             nn.GELU(),
             nn.Dropout(0.1),
             nn.Linear(320, 320),  # history, route, calendar, lead

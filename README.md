@@ -15,6 +15,27 @@ excluded. XML files are cached per year and included in installed packages.
 All three flags apply to hourly history and every requested forecast day.
 Models trained with the previous calendar inputs must be retrained.
 
+Load training data with the scheduled-event source:
+
+```python
+boardings = Boardings.load(
+    labels_path,
+    events_path="dataset/parking_events_hourly.csv",
+    start=start,
+    end=end,
+)
+```
+
+Sampling automatically combines calendar features with the advance-known flags
+`extended_night_service`, `event_near_route`, and `is_citywide_event`. History gets
+three hourly channels; each target day gets three binary flags, reduced with
+maximum over its 24 hours (active at any hour means 1).
+Route-change and parking columns are excluded entirely. The full event schedule
+is kept independently of label dates and cached across loads. Missing schedule rows
+raise errors. Forecasting does not require future boarding labels. The training
+notebook supplies the source path automatically. Retrain using a fresh checkpoint
+name after adding these inputs.
+
 ## Project layout
 
 | Path | Purpose |

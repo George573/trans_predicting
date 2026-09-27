@@ -7,6 +7,7 @@ import torch
 
 from tram_forecast.data import Boardings, ForecastDataset, calendar, collate_samples, request_calendar
 from tram_forecast.model import ForecastNetwork
+from tram_forecast.events import ScheduledEvents
 from tram_forecast.predict import fixed_forecast
 from tram_forecast.russian_calendar import day_flags, is_holiday, parse_calendar
 
@@ -49,7 +50,9 @@ def test_hourly_and_requested_holiday_flags_agree():
 
 def test_training_and_inference_accept_holiday_features():
     boardings = Boardings(np.ones((1, 45 * 24), dtype=np.float32),
-                          (1,), date(2025, 10, 15), 1.0)
+                          (1,), date(2025, 10, 15), 1.0,
+                          ScheduledEvents(np.zeros((1, 3, 45 * 24), dtype=np.float32),
+                                          (1,), date(2025, 10, 15)))
     dataset = ForecastDataset(boardings, forecast_days=7, history_days=14)
     history, request, targets = collate_samples([dataset[0]])
     model = ForecastNetwork(1.0)

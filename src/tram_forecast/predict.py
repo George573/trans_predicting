@@ -19,7 +19,7 @@ def fixed_forecast(model, boardings, cutoff, days, history_days):
     device = next(model.parameters()).device
     results = []
     for route in boardings.routes:
-        s = sample(boardings, route, cutoff, days, history_days=history_days)
+        s = sample(boardings, route, cutoff, days, history_days=history_days, include_target=False)
         history = {
             "counts": torch.as_tensor(s["counts"][None], device=device, dtype=torch.float32),
             "calendar": torch.as_tensor(s["calendar"][None], device=device, dtype=torch.float32),

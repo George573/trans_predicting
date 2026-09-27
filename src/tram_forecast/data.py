@@ -10,12 +10,15 @@ import torch
 from torch.utils.data import Dataset
 
 from .russian_calendar import day_flags
+from .events import EVENT_FEATURES, ScheduledEvents, load_events
 
 HISTORY_CALENDAR_FEATURES = (
     "hour_sin", "hour_cos", "weekday_sin", "weekday_cos", "month_day_sin",
     "month_day_cos", "is_holiday", "is_day_off", "is_short_working_day",
 )
 REQUEST_CALENDAR_FEATURES = HISTORY_CALENDAR_FEATURES[2:]
+HISTORY_INPUT_FEATURES = HISTORY_CALENDAR_FEATURES + EVENT_FEATURES
+REQUEST_INPUT_FEATURES = REQUEST_CALENDAR_FEATURES + EVENT_FEATURES
 
 HISTORY_DAYS = 21
 ROUTES = (1, 7, 11, 12, 17, 25, 26, 28, 50)
@@ -45,14 +48,16 @@ def request_calendar(days):
 
 @dataclass
 class Boardings:
-    """Just the counts, in memory. No files written, no fingerprints."""
+    """Boarding labels and a shared event schedule, with independent coverage."""
     counts: np.ndarray   # [routes, hours]
     routes: tuple
     start: date
     scale: float
+    scheduled_events: ScheduledEvents | None = None
 
     @classmethod
-    def load(cls, path, routes=ROUTES, start=date(2025, 1, 1), end=date(2026, 1, 1)):
+    def load(cls, path, routes=ROUTES, start=date(2025, 1, 1), end=date(2026, 1, 1),
+             events_path=None):
         width = (end - start).days * 24
         counts = np.zeros((len(routes), width), dtype=np.float32)
         index = {r: i for i, r in enumerate(routes)}
@@ -63,7 +68,8 @@ class Boardings:
                 if r in index and start <= d < end:
                     j = (d - start).days * 24 + int(row["hour"])
                     counts[index[r], j] = int(row["boardings"])
-        return cls(counts, tuple(routes), start, max(1.0, float(counts.mean())))
+        events = load_events(events_path) if events_path is not None else None
+        return cls(counts, tuple(routes), start, max(1.0, float(counts.mean())), events)
 
     def history(self, route, cutoff, history_days):
         stop = (cutoff - self.start).days * 24
@@ -78,17 +84,29 @@ class Boardings:
         return self.counts[self.routes.index(route), offset : offset + 24].copy()
 
 
-def sample(boardings, route, cutoff, forecast_days, history_days):
+def sample(boardings, route, cutoff, forecast_days, history_days, *, include_target=True):
+    """Assemble calendar and hourly event inputs; targets are optional for inference."""
+    if boardings.scheduled_events is None:
+        raise ValueError("Load Boardings with events_path before sampling model inputs")
     first = datetime.combine(cutoff, day_time.min) - timedelta(days=history_days)
     requested = [cutoff + timedelta(days=d) for d in range(forecast_days)]
-    return {
+    history_events = boardings.scheduled_events.window(route, first.date(), history_days * 24)
+    future_events = boardings.scheduled_events.window(route, cutoff, forecast_days * 24)
+    # A target-day flag is 1 if the event is active at any hour of that day.
+    future_events = future_events.T.reshape(forecast_days, 24, len(EVENT_FEATURES)).max(axis=1)
+    result = {
         "counts": boardings.history(route, cutoff, history_days)[None, :],
-        "calendar": calendar(first + timedelta(hours=i) for i in range(history_days * 24)),
+        "calendar": np.concatenate((
+            calendar(first + timedelta(hours=i) for i in range(history_days * 24)),
+            history_events,
+        )),
         "route_index": ROUTES.index(route) + 1,
-        "request_calendar": request_calendar(requested),
+        "request_calendar": np.concatenate((request_calendar(requested), future_events), axis=1),
         "lead": np.arange(1, forecast_days + 1, dtype=np.float32),
-        "target": np.stack([boardings.target(route, d) for d in requested]),
     }
+    if include_target:
+        result["target"] = np.stack([boardings.target(route, d) for d in requested])
+    return result
 
 
 class ForecastDataset(Dataset):
