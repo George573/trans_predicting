@@ -112,7 +112,8 @@ export function forecastMock(): Plugin {
         const path = (request.url ?? "").split("?")[0];
         if (path === "/healthz") return reply(response, 200, { status: "ok", bundle: fixture("forecast-day").bundle });
         if (path === "/api/v1/routes") return reply(response, 200, { routes });
-        if (path === "/api/v1/model") return reply(response, 200, { bundle: fixture("forecast-day").bundle, model: "catboost_cyclic_service", mode: "service", features: [], train_period: ["2025-01-01", "2025-10-31"], horizon: ["2025-01-01", "2026-04-30"] });
+        if (path === "/api/v1/model") return reply(response, 200, { default: "catboost", models: [{ name: "catboost", bundle: fixture("forecast-day").bundle, model: "catboost_cyclic_service", describe: "CatBoost, мок", files: [], mode: "service", features: [], train_period: ["2025-01-01", "2025-10-31"], horizon: ["2025-01-01", "2026-04-30"] }] });
+        if (path === "/geo/routes.geojson") return reply(response, 200, JSON.parse(readFileSync(new URL("../../web/geo/routes.geojson", import.meta.url), "utf8")));
         if (path === "/api/v1/conditions") return reply(response, 200, { conditions: catalog });
         if (path === "/api/v1/stats") return reply(response, 200, { requests: served, rows, rps_1m: served / Math.max(1, (Date.now() - started) / 60000), p50_ms: 1.1, p95_ms: 2.4, cpu_pct: 3.2, rss_mb: 48.5, uptime_s: (Date.now() - started) / 1000 });
         if (path === "/api/v1/explain") {

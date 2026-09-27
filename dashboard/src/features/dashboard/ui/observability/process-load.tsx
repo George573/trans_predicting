@@ -102,7 +102,8 @@ export function ProcessLoad({ request, ready }: Props) {
       {!ready && <Text size="xs" c="dimmed">Для прогона нужен успешный текущий прогноз.</Text>}
       <Text size="xs">Успехов: {successes} · ошибок: {failures} · отменено: {canceled}</Text>
       <Text size="xs">RPS этого браузера: {elapsed > 0 ? display(successes / elapsed) : "нет данных"} · RPS сервиса за минуту: {display(stats?.rps_1m)}</Text>
-      <Text size="xs">CPU: {display(stats?.cpu_pct)}% · память: {display(stats?.rss_mb)} МБ · p50: {display(stats?.p50_ms)} мс · p95: {display(stats?.p95_ms)} мс</Text>
+      <Text size="xs">CPU: {display(stats?.cpu_pct)}% одного ядра · память: {display(stats?.rss_mb)} МБ · p50: {display(stats?.p50_ms)} мс · p95: {display(stats?.p95_ms)} мс</Text>
+      <Text size="xs">С запуска сервиса: запросов {stats ? stats.requests.toLocaleString("ru-RU") : "нет данных"} · ошибок {stats ? stats.errors.toLocaleString("ru-RU") : "нет данных"} · строк модели {stats ? stats.rows.toLocaleString("ru-RU") : "нет данных"} · работает {stats ? `${Math.floor(stats.uptime_s / 3600)} ч ${Math.floor(stats.uptime_s % 3600 / 60)} мин` : "нет данных"}</Text>
       <Text size="xs" c="dimmed">Браузер может ограничить число соединений примерно шестью: его RPS - нижняя оценка. Для точного замера используйте нагрузочный клиент сервиса.</Text>
       {statsError && <Alert color="yellow">{statsError}. Ресурсы неизвестны.</Alert>}
     </>}

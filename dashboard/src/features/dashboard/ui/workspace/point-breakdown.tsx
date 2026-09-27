@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
-import { Alert, Button, Group, Paper, ScrollArea, Select, Skeleton, Stack, Table, Text } from "@mantine/core";
+import { Alert, Badge, Button, Group, Paper, ScrollArea, Select, Skeleton, Stack, Table, Text } from "@mantine/core";
 import { fetchClient } from "@/shared/api/instance";
 import type { components } from "@/shared/api/schema/generated";
 import type { ForecastRequest, ForecastResponse } from "../../model/forecast-state";
 import { momentAt } from "../../lib/moment";
 
 type ExplainResponse = components["schemas"]["ExplainResponse"];
-type Props = { data: ForecastResponse; selectedIndex: number; route: number | null; onRoute: (route: number | null) => void; applied: ForecastRequest["conditions"]; requested: number };
+type Props = { data: ForecastResponse; request: ForecastRequest | null; selectedIndex: number; route: number | null; onRoute: (route: number | null) => void };
 
 const amount = (value: number) => Math.round(value).toLocaleString("ru-RU");
 
-export function PointBreakdown({ data, selectedIndex, route, onRoute, applied, requested }: Props) {
+export function PointBreakdown({ data, request, selectedIndex, route, onRoute }: Props) {
   const [hour, setHour] = useState<string | null>(null);
   const [day, setDay] = useState<string | null>(null);
   const [result, setResult] = useState<ExplainResponse | null>(null);
@@ -23,8 +23,7 @@ export function PointBreakdown({ data, selectedIndex, route, onRoute, applied, r
   const askedRoute = routes.length === 1 ? routes[0] : routes.find((item) => item === route) ?? null;
   const askedDate = data.step === "1mo" ? day : moment.format("YYYY-MM-DD");
   const askedHour = data.step === "1h" ? moment.hour() : hour === null ? null : Number(hour);
-  const excluded = requested - applied.length;
-  const conditions = JSON.stringify(applied);
+  const context = JSON.stringify({ model: request?.model, horizon: request?.horizon ?? "day", conditions: request?.conditions ?? [] });
 
   useEffect(() => {
     if (askedRoute === null || !askedDate || askedHour === null) {
@@ -38,7 +37,7 @@ export function PointBreakdown({ data, selectedIndex, route, onRoute, applied, r
     queueMicrotask(async () => {
       if (controller.signal.aborted) return;
       try {
-        const body = { route: askedRoute, date: askedDate, hour: askedHour, conditions: JSON.parse(conditions) as ForecastRequest["conditions"] } as components["schemas"]["ExplainRequest"];
+        const body: components["schemas"]["ExplainRequest"] = { ...JSON.parse(context), route: askedRoute as components["schemas"]["RouteNumber"], date: askedDate, hour: askedHour };
         const answer = await fetchClient.POST("/api/v1/explain", { body, signal: controller.signal });
         if (controller.signal.aborted) return;
         if (answer.error) { setError(answer.error.error.message); setResult(null); }
@@ -48,7 +47,7 @@ export function PointBreakdown({ data, selectedIndex, route, onRoute, applied, r
       } finally { if (!controller.signal.aborted) setLoading(false); }
     });
     return () => controller.abort();
-  }, [askedRoute, askedDate, askedHour, conditions, revision]);
+  }, [askedRoute, askedDate, askedHour, context, revision]);
 
   return <Paper p="md" withBorder>
     <Stack gap="xs">
@@ -61,7 +60,6 @@ export function PointBreakdown({ data, selectedIndex, route, onRoute, applied, r
       <Text size="xs" c="dimmed">
         {askedRoute === null ? "Выберите маршрут: сумма сети не разбирается." : askedDate === null ? "Выберите дату внутри месяца." : askedHour === null ? "Выберите час: агрегат за сутки не подписывается значением разбора." : `Маршрут ${askedRoute}, ${askedDate}, ${String(askedHour).padStart(2, "0")}:00`}
       </Text>
-      {requested > 0 && <Text size="xs" c="dimmed">В разбор ушло {applied.length} условий из {requested}{excluded > 0 ? `: неприменимые на этом горизонте исключены, потому что в запросе разбора нет горизонта` : ""}.</Text>}
       {loading && <Skeleton height={120} />}
       {error && <Alert color="red" p="xs">{error}<Button size="compact-xs" ml="sm" onClick={() => retry((value) => value + 1)}>Повторить</Button></Alert>}
       {result && !loading && <Stack gap="xs">
@@ -74,7 +72,18 @@ export function PointBreakdown({ data, selectedIndex, route, onRoute, applied, r
             <Table.Td>{amount(step.value)}</Table.Td>
           </Table.Tr>)}</Table.Tbody>
         </Table>
-        <Text size="sm">Итог: {amount(result.value)}</Text>
+        <Text size="sm">Итог: {amount(result.value)} · модель {result.model}</Text>
+        {result.conditions.length > 0 && <Table withTableBorder={false} verticalSpacing={2} fz="xs">
+          <Table.Thead><Table.Tr><Table.Th>Условие за сутки</Table.Th><Table.Th>Состояние</Table.Th><Table.Th>Множитель</Table.Th><Table.Th>Вклад</Table.Th><Table.Th>Часов</Table.Th></Table.Tr></Table.Thead>
+          <Table.Tbody>{result.conditions.map((condition) => <Table.Tr key={condition.id}>
+            <Table.Td>{condition.id}</Table.Td>
+            <Table.Td>{condition.applied ? <Badge color="teal" size="xs">применено</Badge> : <Badge color="gray" size="xs">не применено</Badge>}</Table.Td>
+            <Table.Td>{condition.factor}</Table.Td>
+            <Table.Td>{condition.applied ? `${condition.contribution_pct}%` : "-"}</Table.Td>
+            <Table.Td>{condition.points}</Table.Td>
+          </Table.Tr>)}</Table.Tbody>
+        </Table>}
+        {result.warnings.map((warning, index) => <Alert key={index} color="yellow" p="xs">{warning.message}</Alert>)}
         <Text size="xs" c="dimmed">Календарь: {Object.entries(result.calendar).map(([key, value]) => `${key} = ${String(value)}`).join(", ")}</Text>
         <ScrollArea.Autosize mah={140}>
           <Table withTableBorder={false} verticalSpacing={1} fz="xs">

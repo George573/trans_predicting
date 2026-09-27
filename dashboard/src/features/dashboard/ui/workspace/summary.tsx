@@ -1,8 +1,9 @@
 import { Alert, Anchor, Badge, Button, Group, Paper, Stack, Table, Text } from "@mantine/core";
 import type { ForecastResponse } from "../../model/forecast-state";
 import { momentLabel, quantityLabel } from "../../lib/moment";
+import type { Comparison } from "./workspace";
 
-type Props = { data: ForecastResponse; selectIndex: (index: number) => void; onRouteSelect: (route: number) => void };
+type Props = { data: ForecastResponse; comparison: Comparison; selectIndex: (index: number) => void; onRouteSelect: (route: number) => void };
 
 const amount = (value: number) => Math.round(value).toLocaleString("ru-RU");
 
@@ -19,7 +20,7 @@ function exceedances(data: ForecastResponse) {
   });
 }
 
-export function Summary({ data, selectIndex, onRouteSelect }: Props) {
+export function Summary({ data, comparison, selectIndex, onRouteSelect }: Props) {
   if (data.series.length === 0) return <Paper p="md" withBorder><Text fw={600}>Цифры и тревоги</Text><Text size="sm" c="dimmed">Нет данных: сервис вернул прогноз без рядов.</Text></Paper>;
   const total = data.series.reduce((sum, series) => sum + series.total, 0);
   const baseTotal = data.series.reduce((sum, series) => sum + series.base_total, 0);
@@ -28,6 +29,7 @@ export function Summary({ data, selectIndex, onRouteSelect }: Props) {
   const withCorridor = data.series.filter((series) => series.hi);
   const alerts = exceedances(data);
   const shown = alerts.slice(0, 12);
+  const otherTotal = comparison?.data.series.filter((series) => data.series.some((item) => item.route === series.route)).reduce((sum, series) => sum + series.total, 0);
 
   return <Paper p="md" withBorder>
     <Stack gap="sm">
@@ -38,6 +40,7 @@ export function Summary({ data, selectIndex, onRouteSelect }: Props) {
         <Text size="sm" c="dimmed">Без условий: {amount(baseTotal)}</Text>
         <Text size="sm">Изменение: {difference >= 0 ? "+" : ""}{amount(difference)}{baseTotal > 0 ? ` (${difference >= 0 ? "+" : ""}${(100 * difference / baseTotal).toFixed(1)}%)` : ""}</Text>
         {baseTotal === 0 && <Text size="xs" c="dimmed">Базовый прогноз равен нулю, доля изменения не считается: показана абсолютная разница.</Text>}
+        {comparison && otherTotal !== undefined && <Text size="sm">{comparison.title}: {amount(otherTotal)}{otherTotal > 0 ? `, показанная модель ${total >= otherTotal ? "выше" : "ниже"} на ${(100 * Math.abs(total - otherTotal) / otherTotal).toFixed(1)}%` : ""}</Text>}
       </Stack>
 
       <Stack gap={2}>
@@ -52,7 +55,7 @@ export function Summary({ data, selectIndex, onRouteSelect }: Props) {
       <Stack gap={4}>
         <Group gap="xs"><Text fw={500}>Превышения коридора</Text>{withCorridor.length > 0 && <Badge color={alerts.length > 0 ? "red" : "teal"}>{alerts.length}</Badge>}</Group>
         {withCorridor.length === 0
-          ? <Text size="sm" c="dimmed">Коридор не запрошен: границ hi в ответе нет, поэтому тревоги недоступны. Это не значит, что превышений нет.</Text>
+          ? <Text size="sm" c="dimmed">{data.step === "1mo" ? "Месячного коридора нет: суточные границы в месячную ширину не складываются, поэтому тревог по месяцам нет." : "Коридор не запрошен: границ hi в ответе нет, поэтому тревоги недоступны."} Это не значит, что превышений нет.</Text>
           : alerts.length === 0
             ? <Text size="sm" c="dimmed">Превышений нет: ни одна точка не вышла за верхнюю границу.</Text>
             : <Table withTableBorder={false} verticalSpacing={2} fz="xs">

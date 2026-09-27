@@ -1,3 +1,4 @@
+import dayjs from "dayjs";
 import type { components } from "@/shared/api/schema/generated";
 
 export type ForecastRequest = components["schemas"]["ForecastRequest"];
@@ -7,6 +8,7 @@ export const forecastDomain: [string, string] = ["2025-01-01", "2026-04-30"];
 
 export function normalizeRequest(request: ForecastRequest): ForecastRequest {
   return {
+    ...(request.model && { model: request.model }),
     routes: [...new Set(request.routes ?? [])].sort((first, second) => first - second),
     from: request.from,
     to: request.to,
@@ -48,4 +50,20 @@ export function requestViolation(request: ForecastRequest, horizon?: string[]): 
   if (request.granularity === "hour" && days > 31) return { message: `По часам доступен период не больше 31 суток, запрошено ${days}`, field: "granularity" };
   if (request.conditions.length > 16) return { message: `Условий не больше 16, задано ${request.conditions.length}`, field: "conditions" };
   return null;
+}
+
+export function fitPeriod(request: ForecastRequest, bounds: string[]): { from: string; to: string } {
+  if (request.from >= bounds[0]) return { from: request.from, to: request.to };
+  const start = dayjs(bounds[0]);
+  const format = (day: dayjs.Dayjs) => day.format("YYYY-MM-DD");
+  if (request.horizon === "month") {
+    const month = start.date() === 1 ? start : start.add(1, "month").startOf("month");
+    return { from: format(month), to: format(month.endOf("month")) };
+  }
+  if (request.horizon === "week") {
+    const monday = start.add((8 - start.day()) % 7, "day");
+    return { from: format(monday), to: format(monday.add(6, "day")) };
+  }
+  if (request.horizon === "season") return { from: request.from, to: request.to };
+  return { from: bounds[0], to: bounds[0] };
 }

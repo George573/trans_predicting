@@ -9,7 +9,7 @@ export type Scope = components["schemas"]["Scope"];
 export type RouteNumber = components["schemas"]["RouteNumber"];
 export type AppliedCondition = components["schemas"]["AppliedCondition"];
 export type ForecastWarning = components["schemas"]["Warning"];
-export type ForecastResponse = components["schemas"]["ForecastResponse"];
+export type ForecastResponse = Pick<components["schemas"]["ForecastResponse"], "conditions" | "warnings">;
 export type Horizon = components["schemas"]["Horizon"];
 
 export const conditionLimit = 16;
@@ -82,4 +82,16 @@ export function formatNumber(value: number): string {
 
 export function formatSignedPercent(value: number): string {
   return `${value > 0 ? "+" : ""}${formatNumber(value)}%`;
+}
+
+export function conditionEffect(entry: CatalogEntry, value: number, routes: number[]): number | null {
+  const curve = entry.curve;
+  if (!curve || curve.length === 0) return null;
+  const passport = passportFor(entry, routes);
+  const scale = passport !== entry.passport && entry.passport.effect_pct !== 0 ? passport.effect_pct / entry.passport.effect_pct : 1;
+  if (value <= curve[0][0]) return curve[0][1] * scale;
+  const next = curve.findIndex(([x]) => value < x);
+  if (next < 0) return curve[curve.length - 1][1] * scale;
+  const [[x0, y0], [x1, y1]] = [curve[next - 1], curve[next]];
+  return (y0 + (y1 - y0) * (value - x0) / (x1 - x0)) * scale;
 }

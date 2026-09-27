@@ -1,19 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
-import dayjs from "dayjs";
 import { Alert, Badge, Box, Button, Checkbox, Divider, Drawer, Flex, Group, ScrollArea, SegmentedControl, Skeleton, Stack, Text, Title } from "@mantine/core";
 import { apiBaseUrl, fetchClient } from "@/shared/api/instance";
-import type { components } from "@/shared/api/schema/generated";
-import { useForecast, type Route, type ForecastResponse } from "./model/forecast-state";
-import { forecastDomain, sameRequest } from "./forecast-request";
+import { useComparison, useForecast, type Route, type ForecastResponse } from "./model/forecast-state";
+import { fitPeriod, forecastDomain, sameRequest } from "./forecast-request";
 import { PeriodControls } from "./ui/period";
 import { ScenarioPanel } from "@/features/scenario";
-import { SeasonRequestPanel } from "./ui/season-request-panel";
+import { ModelPanel } from "./ui/model-panel";
 import { Workspace } from "./ui/workspace";
+import { modelTitles, recursiveFrom, type ModelInfo, type ModelName } from "./domain/model";
+import { momentLabel } from "./lib/moment";
 
-type Model = components["schemas"]["ModelInfo"];
-
-function useServiceModel() {
-  const [model, setModel] = useState<Model | null>(null);
+function useServiceModels() {
+  const [models, setModels] = useState<ModelInfo[]>([]);
+  const [defaultModel, setDefaultModel] = useState<ModelName>("catboost");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const reload = useCallback(async () => {
@@ -26,14 +25,15 @@ function useServiceModel() {
         throw new Error(body?.error?.message ?? "Сервис пока не готов");
       }
       const result = await fetchClient.GET("/api/v1/model");
-      if (result.error || !result.data) throw new Error(result.error?.error.message ?? "Не удалось получить сведения о модели");
-      setModel(result.data);
+      if (result.error || !result.data) throw new Error(result.error?.error.message ?? "Не удалось получить сведения о моделях");
+      setModels(result.data.models);
+      setDefaultModel(result.data.models.find((model) => model.name === result.data.default)?.name ?? result.data.models[0]?.name ?? "catboost");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Сервис недоступен");
     } finally { setLoading(false); }
   }, []);
   useEffect(() => { queueMicrotask(() => void reload()); }, [reload]);
-  return { model, loading, error, reload };
+  return { models, defaultModel, loading, error, reload };
 }
 
 function DashboardSidebar({ routes, selected, onSelect, data, stale }: { routes: Route[]; selected: number[]; onSelect: (routes: number[]) => void; data: ForecastResponse | null; stale: boolean }) {
@@ -47,10 +47,10 @@ function DashboardSidebar({ routes, selected, onSelect, data, stale }: { routes:
         const series = data?.series.find((item) => item.route === route.route);
         const ratios = series?.value.map((value, index) => ({ index, percent: series.usual[index] > 0 ? 100 * value / series.usual[index] : null })).filter((item): item is { index: number; percent: number } => item.percent !== null && Number.isFinite(item.percent));
         const worst = ratios?.reduce((best, item) => item.percent > best.percent ? item : best, ratios[0]);
-        const moment = worst && data ? dayjs(data.start).add(worst.index, data.step === "1h" ? "hour" : data.step === "1d" ? "day" : "month").format(data.step === "1h" ? "DD.MM HH:mm" : "DD.MM") : "";
+        const moment = worst && data ? momentLabel(data, worst.index) : "";
         return <Box key={route.route}>
           <Checkbox label={`Маршрут ${route.route}`} checked={selected.includes(route.route)} onChange={() => onSelect(selected.includes(route.route) ? selected.filter((item) => item !== route.route) : [...selected, route.route])} />
-          <Text size="xs" c="dimmed">{route.name}{!route.has_history && " · оценка"}{!route.has_geometry && " · нет линии на карте"}</Text>
+          <Text size="xs" c="dimmed">{route.name}{!route.has_history && " · оценка"}{!route.has_geometry ? " · нет линии на карте" : route.geometry_source === "spravochnik" ? " · линия из справочника" : route.geometry_source === "osm" ? " · линия из OSM" : ""}</Text>
           {series && <Text size="xs" c={stale ? "dimmed" : undefined}>{!worst ? "Нет сравнения" : `Максимум ${Math.round(worst.percent)}% от обычного уровня · ${moment}${stale ? " · данные обновляются" : ""}`}</Text>}
         </Box>;
       })}
@@ -59,15 +59,26 @@ function DashboardSidebar({ routes, selected, onSelect, data, stale }: { routes:
 }
 
 function DashboardPage() {
-  const { model, loading, error, reload } = useServiceModel();
-  const forecast = useForecast(model?.horizon);
+  const { models, defaultModel, loading, error, reload } = useServiceModels();
+  const forecast = useForecast((name) => models.find((model) => model.name === (name ?? defaultModel))?.horizon);
+  const [compare, setCompare] = useState(false);
+  const active = forecast.request.model ?? defaultModel;
+  const bounds = models.find((model) => model.name === active)?.horizon ?? forecastDomain;
+  const shown = forecast.acceptedRequest?.model ?? defaultModel;
+  const other = compare ? models.find((model) => model.name !== shown)?.name ?? null : null;
+  const comparison = useComparison(forecast.acceptedRequest, other);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [routes, setRoutes] = useState<Route[]>([]);
   const [layout, setLayout] = useState<"map" | "mosaic" | "heat">("map");
   const [controlsOpen, setControlsOpen] = useState(false);
   useEffect(() => { queueMicrotask(async () => { const result = await fetchClient.GET("/api/v1/routes"); if (result.data) setRoutes(result.data.routes); }); }, []);
   const rejectedField = (fields: string[]) => forecast.failure?.field && fields.includes(forecast.failure.field) ? <Alert color={forecast.failure.source === "запрос" ? "yellow" : "red"} p="xs">{forecast.failure.message}</Alert> : null;
-  const controls = <Stack p="md"><DashboardSidebar routes={routes} selected={forecast.request.routes ?? []} onSelect={(selected) => forecast.dispatch({ type: "routes", routes: selected })} data={forecast.data} stale={forecast.loading || !!forecast.failure || !forecast.acceptedRequest || !sameRequest(forecast.request, forecast.acceptedRequest)} />{rejectedField(["routes"])}<Divider /><PeriodControls request={forecast.request} data={forecast.data} bounds={model?.horizon ?? forecastDomain} change={(from, to, horizon, granularity) => forecast.dispatch({ type: "period", from, to, horizon, granularity })} selectedIndex={selectedIndex} selectIndex={setSelectedIndex} />{rejectedField(["from", "to", "granularity", "horizon"])}<Divider /><ScenarioPanel conditions={forecast.request.conditions} requestRoutes={forecast.request.routes ?? []} availableRoutes={routes.map((route) => route.route)} horizon={forecast.request.horizon} from={forecast.request.from} to={forecast.request.to} response={forecast.data} stale={forecast.loading} onChange={(conditions) => forecast.dispatch({ type: "conditions", conditions })} />{rejectedField(["conditions"])}<Divider /><Text fw={600}>Вид</Text><SegmentedControl orientation="vertical" fullWidth value={layout} onChange={(value) => setLayout(value as "map" | "mosaic" | "heat")} data={[{ label: "Карта + графики", value: "map" }, { label: "Мозаика 2x2", value: "mosaic" }, { label: "Маршруты и время", value: "heat" }]} /><Divider /><SeasonRequestPanel request={forecast.request} active={forecast.request.horizon === "season"} /><Divider /><Text fw={600}>Чего модель не считает</Text><Text size="sm" c="dimmed">Прогноз показывает посадки по маршрутам. Данных о числе пассажиров в вагоне и посадках на отдельных остановках нет.</Text></Stack>;
+  const selectModel = (model: ModelName) => {
+    const { from, to } = fitPeriod(forecast.request, models.find((item) => item.name === model)?.horizon ?? forecastDomain);
+    if (from !== forecast.request.from) setSelectedIndex(0);
+    forecast.dispatch({ type: "model", model, from, to });
+  };
+  const controls = <Stack p="md"><ModelPanel models={models} active={active} onSelect={selectModel} compare={compare} onCompare={setCompare} to={forecast.request.to} comparisonError={comparison.model === other ? comparison.error : ""} /><Divider /><DashboardSidebar routes={routes} selected={forecast.request.routes ?? []} onSelect={(selected) => forecast.dispatch({ type: "routes", routes: selected })} data={forecast.data} stale={forecast.loading || !!forecast.failure || !forecast.acceptedRequest || !sameRequest(forecast.request, forecast.acceptedRequest)} />{rejectedField(["routes"])}<Divider /><PeriodControls request={forecast.request} data={forecast.data} bounds={bounds} change={(from, to, horizon, granularity) => forecast.dispatch({ type: "period", from, to, horizon, granularity })} selectedIndex={selectedIndex} selectIndex={setSelectedIndex} />{rejectedField(["from", "to", "granularity", "horizon"])}<Divider /><ScenarioPanel conditions={forecast.request.conditions} requestRoutes={forecast.request.routes ?? []} availableRoutes={routes.map((route) => route.route)} horizon={forecast.request.horizon} from={forecast.request.from} to={forecast.request.to} response={forecast.data} stale={forecast.loading} onChange={(conditions) => forecast.dispatch({ type: "conditions", conditions })} />{rejectedField(["conditions"])}<Divider /><Text fw={600}>Вид</Text><SegmentedControl orientation="vertical" fullWidth value={layout} onChange={(value) => setLayout(value as "map" | "mosaic" | "heat")} data={[{ label: "Карта + графики", value: "map" }, { label: "Мозаика 2x2", value: "mosaic" }, { label: "Маршруты и время", value: "heat" }]} /><Divider /><Text fw={600}>Чего модель не считает</Text><Text size="sm" c="dimmed">Прогноз показывает посадки по маршрутам. Данных о числе пассажиров в вагоне и посадках на отдельных остановках нет.</Text></Stack>;
   return (
     <Stack h="100dvh" gap={0}>
       <Group px="md" py="sm" justify="space-between" style={{ borderBottom: "1px solid var(--mantine-color-dark-4)" }}>
@@ -84,16 +95,16 @@ function DashboardPage() {
       <Divider orientation="vertical" visibleFrom="md" />
 
       <ScrollArea h="100%" flex={1} miw={0}>
-        <Workspace data={forecast.data} seasonAnswers={forecast.seasonAnswers} loading={forecast.loading} updatedAt={forecast.updatedAt} settling={forecast.settling} failure={forecast.failure} retry={forecast.retry} layout={layout} routes={routes} selected={forecast.request.routes ?? []} selectedIndex={selectedIndex} selectIndex={setSelectedIndex} onRouteSelect={(route) => forecast.dispatch({ type: "routes", routes: [route] })} request={forecast.request} acceptedRequest={forecast.acceptedRequest} telemetry={forecast.telemetry} history={forecast.history} repeat={(request) => forecast.dispatch({ type: "replace", request })} />
+        <Workspace data={forecast.data} comparison={other && comparison.model === other && comparison.data ? { title: modelTitles[other], data: comparison.data } : null} recursive={recursiveFrom(models.find((model) => model.name === shown))} loading={forecast.loading} updatedAt={forecast.updatedAt} settling={forecast.settling} failure={forecast.failure} retry={forecast.retry} layout={layout} routes={routes} selected={forecast.request.routes ?? []} selectedIndex={selectedIndex} selectIndex={setSelectedIndex} onRouteSelect={(route) => forecast.dispatch({ type: "routes", routes: [route] })} request={forecast.request} acceptedRequest={forecast.acceptedRequest} telemetry={forecast.telemetry} history={forecast.history} repeat={(request) => forecast.dispatch({ type: "replace", request })} />
       </ScrollArea>
 
       <Divider orientation="vertical" visibleFrom="md" />
 
       <ScrollArea h="100%" flex="0 0 clamp(260px, 18vw, 340px)" visibleFrom="md">
         <Stack p="md">
-          <Text fw={600}>Модель</Text>
+          <Text fw={600}>Модели сервиса</Text>
           {loading && <Skeleton height={100} />}
-          {model && <><Text size="sm">{model.model}</Text><Text size="xs" c="dimmed" style={{ overflowWrap: "anywhere" }}>Версия: {model.bundle}</Text><Text size="xs" c="dimmed">Обучение: {model.train_period.join(" - ")}</Text><Text size="xs" c="dimmed">Период прогноза: {model.horizon.join(" - ")}</Text>{model.mode && <Text size="xs" c="dimmed">Режим: {model.mode}</Text>}</>}
+          {models.map((model) => <ModelDetails key={model.name} model={model} active={model.name === active} />)}
         </Stack>
       </ScrollArea>
     </Flex>
@@ -103,3 +114,21 @@ function DashboardPage() {
 }
 
 export const Component = DashboardPage;
+
+function ModelDetails({ model, active }: { model: ModelInfo; active: boolean }) {
+  const extra = (key: string) => typeof model[key] === "string" || typeof model[key] === "number" ? String(model[key]) : null;
+  return <Stack gap={2}>
+    <Group gap="xs"><Text size="sm" fw={600}>{modelTitles[model.name]}</Text>{active && <Badge size="xs" color="teal">в запросе</Badge>}</Group>
+    <Text size="xs">{model.describe} · {model.model}</Text>
+    {model.wape_score !== undefined && <Text size="xs" c="dimmed">WAPE-score вне обучения: {model.wape_score}</Text>}
+    <Text size="xs" c="dimmed">Обучение: {model.train_period.join(" - ")}</Text>
+    <Text size="xs" c="dimmed">Период прогноза: {model.horizon.join(" - ")}</Text>
+    {extra("recursive_from") && <Text size="xs" c="dimmed">Авторегрессия с {extra("recursive_from")}</Text>}
+    {extra("cutoff") && <Text size="xs" c="dimmed">История до {extra("cutoff")}, окно {extra("history_days")} суток, параметров {Number(model.parameters).toLocaleString("ru-RU")}</Text>}
+    {model.cat_features && model.cat_features.length > 0 && <Text size="xs" c="dimmed">Признаков {model.features.length}, категориальных {model.cat_features.length}</Text>}
+    {(!model.cat_features || model.cat_features.length === 0) && <Text size="xs" c="dimmed">Признаков {model.features.length}</Text>}
+    <Text size="xs" c="dimmed" style={{ overflowWrap: "anywhere" }}>Бандл: {model.bundle}</Text>
+    <Text size="xs" c="dimmed">Файлы, сверенные по SHA-256 при старте:</Text>
+    {model.files.map((file) => <Text key={file.name} size="xs" c="dimmed" ff="monospace" style={{ overflowWrap: "anywhere" }}>{file.name} · {(file.size / 1024).toLocaleString("ru-RU", { maximumFractionDigits: 0 })} КБ · {file.sha256.slice(0, 12)}</Text>)}
+  </Stack>;
+}

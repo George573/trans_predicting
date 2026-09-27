@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Anchor, Button, Popover, Stack, Text } from "@mantine/core";
 import { formatNumber, formatSignedPercent, horizonTitles, type Passport } from "../domain/conditions";
 
-export function ConditionPassport({ passport, title }: { passport: Passport; title: string }) {
+export function ConditionPassport({ passport, title, curve, auto }: { passport: Passport; title: string; curve?: number[][]; auto?: boolean }) {
   const [pinned, setPinned] = useState(false);
   const [hovered, setHovered] = useState(false);
   return (
@@ -33,6 +33,8 @@ export function ConditionPassport({ passport, title }: { passport: Passport; tit
           <Text size="xs">Интервал: от {formatSignedPercent(passport.ci_pct[0])} до {formatSignedPercent(passport.ci_pct[1])}</Text>
           {passport.sample !== undefined && <Text size="xs">Выборка: {formatNumber(passport.sample)}</Text>}
           <Text size="xs">Горизонты: {passport.horizons.map((horizon) => horizonTitles[horizon]).join(", ")}</Text>
+          {curve && curve.length > 0 && <Text size="xs">Кривая эффекта: {curve.map(([value, effect]) => `${formatNumber(value)} ${passport.unit} - ${formatSignedPercent(effect)}`).join("; ")}. Между точками эффект интерполируется, повтор значения - ступенька.</Text>}
+          {auto === false && <Text size="xs" c="dimmed">Из данных автоматически не применяется: условие задаёт диспетчер.</Text>}
         </Stack>
       </Popover.Dropdown>
     </Popover>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ActionIcon, Badge, Card, Group, NumberInput, Slider, Stack, Text } from "@mantine/core";
 import { ConditionPassport } from "./condition-passport";
-import { clampValue, conditionClassOf, conditionClassTitles, conditionStep, conditionTitleOf, formatNumber, formatSignedPercent, passportFor, type CatalogEntry, type ConditionInput } from "../domain/conditions";
+import { clampValue, conditionClassOf, conditionClassTitles, conditionEffect, conditionStep, conditionTitleOf, formatNumber, formatSignedPercent, passportFor, type CatalogEntry, type ConditionInput } from "../domain/conditions";
 
 function ConditionValue({ entry, value, onChange }: { entry: CatalogEntry; value: number; onChange: (value: number) => void }) {
   const [draft, setDraft] = useState<number | null>(null);
@@ -50,10 +50,9 @@ function ConditionValue({ entry, value, onChange }: { entry: CatalogEntry; value
   );
 }
 
-export function ConditionCard({ condition, entry, routes, onChange, onRemove, scopeEditor, muted, note }: {
+export function ConditionCard({ condition, entry, onChange, onRemove, scopeEditor, muted, note }: {
   condition: ConditionInput;
   entry?: CatalogEntry;
-  routes: number[];
   onChange: (condition: ConditionInput) => void;
   onRemove: () => void;
   scopeEditor?: React.ReactNode;
@@ -61,7 +60,9 @@ export function ConditionCard({ condition, entry, routes, onChange, onRemove, sc
   note?: React.ReactNode;
 }) {
   const title = conditionTitleOf(condition.type, entry);
-  const passport = entry && passportFor(entry, routes);
+  const scopeRoutes = condition.scope?.routes ?? [];
+  const passport = entry && passportFor(entry, scopeRoutes);
+  const effect = entry ? conditionEffect(entry, condition.value, scopeRoutes) : null;
   return (
     <Card withBorder padding="xs" opacity={muted ? 0.65 : 1}>
       <Stack gap={6}>
@@ -73,13 +74,14 @@ export function ConditionCard({ condition, entry, routes, onChange, onRemove, sc
             </Badge>
           </Group>
           <Group gap={2} wrap="nowrap">
-            {passport && <ConditionPassport passport={passport} title={title} />}
+            {passport && <ConditionPassport passport={passport} title={title} curve={entry?.curve} auto={entry?.auto} />}
             <ActionIcon variant="subtle" color="red" size="sm" aria-label={`Удалить условие: ${title}`} onClick={onRemove}>x</ActionIcon>
           </Group>
         </Group>
         {entry
           ? <ConditionValue entry={entry} value={condition.value} onChange={(value) => onChange({ ...condition, value })} />
           : <Text size="xs" c="dimmed">Значение: {formatNumber(condition.value)}. Паспорт не получен, пределы ввода неизвестны.</Text>}
+        {effect !== null && <Text size="xs">Эффект при этом значении: {formatSignedPercent(Math.round(effect * 10) / 10)}{scopeRoutes.length === 1 && passport !== entry?.passport ? `, по замеру маршрута ${scopeRoutes[0]}` : ""}</Text>}
         {passport && <Text size="xs" c="dimmed">Эффект по измерениям: {formatSignedPercent(passport.effect_pct)}, интервал от {formatSignedPercent(passport.ci_pct[0])} до {formatSignedPercent(passport.ci_pct[1])}</Text>}
         {condition.type === "route_change" && <Text size="xs" c="dimmed">Применяется к маршруту целиком: участок в контракте не задан.</Text>}
         {note}

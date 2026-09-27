@@ -3,7 +3,7 @@ import dayjs from "dayjs";
 import { Alert, Button, Group, SegmentedControl, Stack, Text } from "@mantine/core";
 import { fetchClient } from "@/shared/api/instance";
 import type { ForecastRequest, ForecastResponse } from "../model/forecast-state";
-import { seasonRange } from "../domain/season";
+import { seasonDays, seasonRange } from "../domain/season";
 
 type Props = { request: ForecastRequest; data: ForecastResponse | null; bounds?: string[]; change: (from: string, to: string, horizon: ForecastRequest["horizon"], granularity: ForecastRequest["granularity"]) => void; selectedIndex: number; selectIndex: (index: number) => void };
 const date = (value: string) => dayjs(value).format("YYYY-MM-DD");
@@ -74,7 +74,7 @@ export function PeriodControls({ request, data, bounds, change, selectedIndex, s
         return <Button key={index} size="compact-xs" variant={selectedIndex === index ? "filled" : "light"} onClick={() => selectIndex(index)} title={`${date(dayjs(request.from).add(index, "day").toString())}: ${Math.round(value)} посадок`}>{index + 1}</Button>;
       })}
     </div>}
-    {season && <Text size="xs" c="dimmed">Сезон запрашивается тремя частями по суткам и показывается шестью месячными суммами. Момент выбирается на графике или тепловой карте.</Text>}
+    {season && <Text size="xs" c="dimmed">Ноябрь 2025 - апрель 2026, {seasonDays} суток: один запрос по суткам ({(seasonDays * 24 * (request.routes?.length || 10)).toLocaleString("ru-RU")} строк модели), на экране шесть месячных сумм. Месячного коридора нет: суточные границы в месячную ширину не складываются. Момент выбирается на графике или тепловой карте.</Text>}
     {!month && !season && data && <Group gap={4}>{Array.from({ length: week ? 7 : 24 }, (_, index) => {
       const label = week ? date(dayjs(request.from).add(index, "day").toString()) : `${String(index).padStart(2, "0")}:00`;
       return <Button key={index} size="compact-xs" variant={selectedIndex === index ? "filled" : "light"} onClick={() => { selectIndex(index); if (week) { setHourly(null); setExpanded(label); } }}>{label}</Button>;

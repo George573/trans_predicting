@@ -1,7 +1,6 @@
 import { Badge, Paper, Stack, Table, Text } from "@mantine/core";
 import { ConditionPassport, conditionTypeTitles, formatSignedPercent } from "@/features/scenario";
 import type { ForecastResponse } from "../../model/forecast-state";
-import type { SeasonAnswer } from "../../domain/season";
 
 const amount = (value: number) => Math.round(value).toLocaleString("ru-RU");
 
@@ -36,11 +35,4 @@ export function ConditionAudit({ data, title = "Аудит условий" }: { 
         </>}
     </Stack>
   </Paper>;
-}
-
-export function SeasonAudit({ answers }: { answers: SeasonAnswer[] }) {
-  return <Stack gap="xs">
-    <Paper p="md" withBorder><Text fw={600}>Аудит сезона</Text><Text size="xs" c="dimmed">Сезон собран тремя запросами по суткам. Вклад условия показан внутри своей части: проценты частей относятся к разным периодам и разным базам, складывать их в сезонный вклад нельзя. Месячного коридора и месячных тревог в данных нет.</Text></Paper>
-    {answers.map((answer) => <ConditionAudit key={answer.label} data={answer.response} title={`Аудит условий: ${answer.label}`} />)}
-  </Stack>;
 }

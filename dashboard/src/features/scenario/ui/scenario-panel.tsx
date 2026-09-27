@@ -70,7 +70,6 @@ export function ScenarioPanel({ conditions, requestRoutes, availableRoutes, hori
               key={condition.id}
               condition={condition}
               entry={entryOf(condition.type)}
-              routes={requestRoutes}
               onChange={(next) => onChange(conditions.map((item) => (item.id === condition.id ? next : item)))}
               onRemove={() => onChange(conditions.filter((item) => item.id !== condition.id))}
               muted={appliedCondition(response, condition.id)?.applied === false}

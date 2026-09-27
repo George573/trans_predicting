@@ -33,8 +33,15 @@ export interface paths {
         /**
          * Тот же прогноз файлом
          * @description Тело запроса совпадает с `/api/v1/forecast`. Выгружается именно то, что на экране:
-         *     те же маршруты, период, квант и условия. Имя файла приходит в `Content-Disposition`,
-         *     клиент сохраняет blob.
+         *     те же маршруты, период, квант, модель и условия. Имя файла приходит в
+         *     `Content-Disposition`, клиент сохраняет blob.
+         *
+         *     Колонки: по часам `route;date;hour;base;factor;prediction[;lo;hi]`, по суткам
+         *     `route;date;base;factor;prediction[;lo;hi]`. Числа округлены так же, как в JSON;
+         *     `factor` - отношение прогноза после условий к прогнозу до них, 4 знака (1 при нулевом
+         *     `base`); `lo;hi` только при `corridor: true`. CSV разделён `;`, в UTF-8.
+         *     В XLSX лист `Прогноз` с теми же колонками (числа - числами) и, если в запросе есть
+         *     условия, лист `Условия`: `id, тип, применено, множитель, вклад_%, точек`.
          */
         post: operations["postForecastExport"];
         delete?: never;
@@ -55,8 +62,10 @@ export interface paths {
         /**
          * Разбор одной клетки
          * @description Весь путь одного значения: календарь, признаки в том виде, в каком они ушли
-         *     в модель, сырой выход, обрезка нуля, калибровка, каждое условие отдельной строкой,
-         *     итог. Вызывается по клику на столбец графика или клетку тепловой карты.
+         *     в модель, сырой выход, обрезка нуля, калибровка, новогодний блок, каждое условие
+         *     отдельной строкой, итог. Вызывается по клику на столбец графика или клетку тепловой
+         *     карты. Для маршрута 5 модель не вызывается ни у одной из моделей: `features` пуст,
+         *     шаги начинаются со строки `маршрут 5` (городская доля).
          */
         post: operations["postExplain"];
         delete?: never;
@@ -110,8 +119,28 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Версия бандла и метаданные обучения */
+        /** Модели сервиса, версии бандлов и метаданные обучения */
         get: operations["getModel"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/geo/routes.geojson": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Линии маршрутов для карты
+         * @description GeoJSON из `web/geo/routes.geojson` как есть.
+         */
+        get: operations["getRoutesGeo"];
         put?: never;
         post?: never;
         delete?: never;
@@ -146,7 +175,8 @@ export interface paths {
         };
         /**
          * Готовность
-         * @description Отвечает 200 только когда бандл загружен и прошёл проверки целостности.
+         * @description Отвечает 200, когда бандлы всех моделей прочитаны и прошли проверки целостности.
+         *     Если проверка не прошла, сервер не стартует, поэтому другого ответа у этой точки нет.
          */
         get: operations["getHealthz"];
         put?: never;
@@ -168,7 +198,8 @@ export interface components {
         RouteNumber: 1 | 5 | 7 | 11 | 12 | 17 | 25 | 26 | 28 | 50;
         /**
          * Format: date
-         * @description Дата в пределах области определения, 2025-01-01 ... 2026-04-30.
+         * @description Дата в пределах области определения выбранной модели: CatBoost - 2025-01-01 ...
+         *     2026-04-30, CNN - 2025-11-01 ... 2026-04-30.
          * @example 2025-11-11
          */
         IsoDate: string;
@@ -178,7 +209,7 @@ export interface components {
          */
         Granularity: "hour" | "day";
         /**
-         * @description Влияет на применимость условий и на ширину коридора, но не на модель: модель одна.
+         * @description Влияет на применимость условий и на ширину коридора, но не на выход модели.
          *     На `month` и `season` оперативные условия не применяются - сохраняются с
          *     `applied: false` и предупреждением.
          * @enum {string}
@@ -230,7 +261,18 @@ export interface components {
             value: number;
             scope?: components["schemas"]["Scope"];
         };
+        /**
+         * @description Какая модель считает прогноз. `catboost` - профильная модель без лагов, область
+         *     2025-01-01 ... 2026-04-30. `cnn` - сеть с контекстом 14 суток истории до 2025-11-01,
+         *     область 2025-11-01 ... 2026-04-30: до 2025-12-31 прямой прогноз, с 2026-01-01
+         *     авторегрессия, посчитанная при сборке бандла. Условия, коридор, обычный уровень, разбор и
+         *     выгрузка работают одинаково для обеих.
+         * @default catboost
+         * @enum {string}
+         */
+        ModelName: "catboost" | "cnn";
         ForecastRequest: {
+            model?: components["schemas"]["ModelName"];
             /** @description Пусто или отсутствует - все десять. */
             routes?: components["schemas"]["RouteNumber"][];
             from: components["schemas"]["IsoDate"];
@@ -349,10 +391,13 @@ export interface components {
             features?: number;
             model?: number;
             corrections?: number;
-            json?: number;
         };
         Meta: {
-            /** @description Сколько строк ушло в модель. */
+            /**
+             * @description Сколько строк ушло в модель, включая пересчёт обычного уровня для необычных дней.
+             *     Предел 50 000 строк на запрос считается по строкам прогноза без этого пересчёта,
+             *     поэтому `rows` бывает больше 50 000.
+             */
             rows: number;
             /** @example catboost_cyclic_service */
             model: string;
@@ -362,7 +407,7 @@ export interface components {
             /** @example 2025-11-10T00:00 */
             start: string;
             /** @enum {string} */
-            step: "1h" | "1d" | "1mo";
+            step: "1h" | "1d";
             /** @example 2026-09-27T09:12:00Z/8f3a1c */
             bundle: string;
             series: components["schemas"]["Series"][];
@@ -371,20 +416,30 @@ export interface components {
             meta: components["schemas"]["Meta"];
         };
         ExplainRequest: {
+            model?: components["schemas"]["ModelName"];
             route: components["schemas"]["RouteNumber"];
             date: components["schemas"]["IsoDate"];
             hour: number;
+            /**
+             * @description Горизонт, на котором применяются условия, как в прогнозе.
+             * @default day
+             */
+            horizon: components["schemas"]["Horizon"];
             /** @default [] */
             conditions: components["schemas"]["ConditionInput"][];
         };
         ExplainStep: {
-            /** @description Например: сырой выход модели, обрезка нуля, калибровка, условие c1. */
+            /**
+             * @description Например: сырой выход модели, обрезка нуля, калибровка, маршрут 5, новогодний
+             *     блок, условие c1, коридор корректировки.
+             */
             step: string;
             detail?: string;
             factor?: number | null;
             value: number;
         };
         ExplainResponse: {
+            model: components["schemas"]["ModelName"];
             route: components["schemas"]["RouteNumber"];
             date: components["schemas"]["IsoDate"];
             hour: number;
@@ -402,6 +457,12 @@ export interface components {
             }[];
             steps: components["schemas"]["ExplainStep"][];
             value: number;
+            /**
+             * @description Аудит условий по всем 24 часам этого маршрута и дня, как в прогнозе на эти
+             *     сутки, а не только по одной клетке.
+             */
+            conditions: components["schemas"]["AppliedCondition"][];
+            warnings: components["schemas"]["Warning"][];
         };
         CatalogEntry: {
             type: components["schemas"]["ConditionType"];
@@ -427,6 +488,34 @@ export interface components {
              * @default false
              */
             auto: boolean;
+            /**
+             * @description Кривая эффекта: пары [значение в единицах паспорта, эффект в процентах],
+             *     кусочно-линейная; повтор x - ступенька. Между точками значение интерполируется,
+             *     за краями берётся крайняя точка.
+             * @example [
+             *       [
+             *         0,
+             *         0
+             *       ],
+             *       [
+             *         0.05,
+             *         0
+             *       ],
+             *       [
+             *         0.05,
+             *         -2.2
+             *       ],
+             *       [
+             *         0.3,
+             *         -2.2
+             *       ],
+             *       [
+             *         0.3,
+             *         -6.4
+             *       ]
+             *     ]
+             */
+            curve?: number[][];
         };
         Route: {
             route: components["schemas"]["RouteNumber"];
@@ -442,33 +531,72 @@ export interface components {
             /** @enum {string} */
             geometry_source?: "spravochnik" | "osm" | "none";
         };
+        /**
+         * @description Метаданные бандла модели: поля `meta.json` как есть плюс `name`, `bundle`, `describe`
+         *     и `files`. У каждой модели могут быть свои дополнительные поля (у CNN - `cutoff`,
+         *     `history_days`, `parameters`, `validation`).
+         */
         ModelInfo: {
+            name: components["schemas"]["ModelName"];
             bundle: string;
+            /** @example catboost_cyclic_service */
             model: string;
             /**
-             * @description `service` - погоды в модели нет, она приходит условием; так работает дашборд.
-             *     `metric` - погода признаками; этим бандлом собран CSV для платформы. Одновременно
-             *     режимы не применяются: эффект считался бы дважды.
+             * @description Короткое описание модели для интерфейса.
+             * @example CatBoost, 625 деревьев
+             */
+            describe: string;
+            /** @description Файлы бандла с размером и SHA-256, проверенные при старте. */
+            files: {
+                name: string;
+                size: number;
+                sha256: string;
+            }[];
+            /**
+             * @description `service` - погоды в модели нет, она приходит условием. Сервис читает только такие
+             *     бандлы: метрический бандл с погодой признаками (им собран CSV для платформы) не
+             *     экспортируется, иначе эффект погоды считался бы дважды.
              * @enum {string}
              */
-            mode?: "service" | "metric";
+            mode?: "service";
             features: string[];
             cat_features?: string[];
             train_period: components["schemas"]["IsoDate"][];
-            /** @description Область определения по датам, 2025-01-01 ... 2026-04-30. */
+            /** @description Область определения по датам. */
             horizon: components["schemas"]["IsoDate"][];
-            /** @example 0.8882 */
+            /**
+             * @description 1 - WAPE вне обучения: у CatBoost - на фолдах 3 и 4 до калибровки, у CNN - у
+             *     валидационной модели на 61 сутках с 2025-09-01.
+             * @example 0.8929
+             */
             wape_score?: number;
+        } & {
+            [key: string]: unknown;
         };
         Stats: {
-            requests?: number;
-            rows?: number;
-            rps_1m?: number;
-            p50_ms?: number;
-            p95_ms?: number;
-            cpu_pct?: number;
-            rss_mb?: number;
-            uptime_s?: number;
+            /** @description Успешные запросы прогноза, выгрузки и разбора с запуска. */
+            requests: number;
+            /** @description Ответы с ошибкой с запуска, включая 401. */
+            errors: number;
+            /** @description Сколько строк прошло через модели с запуска. */
+            rows: number;
+            /** @description Успешных запросов в секунду за последнюю минуту. */
+            rps_1m: number;
+            /**
+             * @description Медиана времени обработки по последним успешным запросам: не больше 4096 последних
+             *     и не старше минуты; 0 без запросов.
+             */
+            p50_ms: number;
+            /** @description Квантиль 0.95 по той же выборке, что `p50_ms`. */
+            p95_ms: number;
+            /** @description CPU процесса с предыдущего вызова `/api/v1/stats`, процент одного ядра. */
+            cpu_pct: number;
+            /**
+             * @description На Linux - резидентная память процесса. На других системах - память рантайма Go
+             *     (`runtime.MemStats.Sys`), без памяти библиотеки CatBoost.
+             */
+            rss_mb: number;
+            uptime_s: number;
         };
         Error: {
             error: {
@@ -492,7 +620,7 @@ export interface components {
                  * @example {
                  *       "error": {
                  *         "code": "out_of_domain",
-                 *         "message": "Дата 2026-07-01 вне области определения модели, доступно до 2026-04-30",
+                 *         "message": "Дата 2026-07-01 вне области определения модели catboost, доступно до 2026-04-30",
                  *         "field": "to"
                  *       }
                  *     }
@@ -541,7 +669,8 @@ export interface components {
     requestBodies: never;
     headers: {
         /**
-         * @description Разбивка времени обработки, те же величины, что в `meta.timings`.
+         * @description Разбивка времени обработки: те же величины, что в `meta.timings`, плюс `json` -
+         *     сериализация ответа, которая есть только в заголовке.
          * @example parse;dur=0.1, features;dur=0.6, model;dur=1.2, corrections;dur=0.2, json;dur=0.4
          */
         ServerTiming: string;
@@ -597,14 +726,19 @@ export interface operations {
             /** @description Файл выгрузки */
             200: {
                 headers: {
-                    /** @description Например: attachment; filename="forecast_2025-11-11_r7.csv" */
+                    /**
+                     * @description Имя файла: `forecast_<model>_<from>[_<to>]_<routes>.<ext>`, где `<to>` есть
+                     *     только у периода длиннее суток, а `<routes>` - `all` для всех десяти маршрутов
+                     *     или `r` и номера через дефис. Например:
+                     *     `attachment; filename="forecast_catboost_2025-11-11_r7.csv"`.
+                     */
                     "Content-Disposition"?: string;
                     [name: string]: unknown;
                 };
                 content: {
                     /**
-                     * @example route;date;hour;base;prediction;lo;hi
-                     *     7;2025-11-11;0;41;41;33;50
+                     * @example route;date;hour;base;factor;prediction;lo;hi
+                     *     7;2025-11-11;0;41;1;41;33;50
                      */
                     "text/csv": string;
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
@@ -613,6 +747,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             413: components["responses"]["TooLarge"];
+            500: components["responses"]["ServerError"];
         };
     };
     postExplain: {
@@ -639,6 +774,16 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            /** @description Больше 16 условий или тело запроса больше 1 МБ */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            500: components["responses"]["ServerError"];
         };
     };
     getConditions: {
@@ -696,13 +841,41 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Метаданные */
+            /** @description Метаданные обеих моделей */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ModelInfo"];
+                    "application/json": {
+                        /**
+                         * @description Модель, которая считает запрос без поля `model`.
+                         * @example catboost
+                         */
+                        default: string;
+                        models: components["schemas"]["ModelInfo"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getRoutesGeo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description FeatureCollection с линиями маршрутов */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/geo+json": Record<string, never>;
                 };
             };
             401: components["responses"]["Unauthorized"];
@@ -747,18 +920,22 @@ export interface operations {
                     "application/json": {
                         /** @enum {string} */
                         status: "ok";
-                        /** @example 2026-09-27T09:12:00Z/8f3a1c */
+                        /**
+                         * @description Версия бандла модели по умолчанию.
+                         * @example 2026-09-27T09:12:00Z/8f3a1c
+                         */
                         bundle: string;
+                        /**
+                         * @description Версия бандла каждой модели сервиса.
+                         * @example {
+                         *       "catboost": "2026-09-27T09:12:00Z/8f3a1c",
+                         *       "cnn": "2026-09-27T10:40:00Z/8c16e8"
+                         *     }
+                         */
+                        models: {
+                            [key: string]: string;
+                        };
                     };
-                };
-            };
-            /** @description Бандл не загружен */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
                 };
             };
         };
